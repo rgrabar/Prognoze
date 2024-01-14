@@ -1,9 +1,31 @@
+{% load static %}
 <!DOCTYPE html>
 
-<p> aaaaaaa </p>
+<style>
+.box {
+    display: flex;
+    gap: 24px;
+}
+</style>
 
-<h1>{{ min }}</h1>
-
-<h1>{{ current }}</h1>
-
-<h1>{{ max }}</h1>
+<div class="box">
+    <img src = "{% static 'sun.png' %}">
+    <div>
+        <div style = "font-size:48px">{{ current }}°C</div>
+        <div class = "box">
+            <div>min: {{ min }} °C</div>
+        </div>
+        <div>max: {{ max }} °C</div>
+    </div>
+    <div>
+        <div class = "box">
+            <div style = "font-size:48px">{{ wind_speed }} km/h</div>
+            <img style = "align-self: start;" src = "{% static 'E.png' %}">
+        </div>
+        <div class = "box">
+            <div style = "font-size:48px">{{ kisa }}%</div>
+            <img width="40" height="40" style = "align-self: start;" src = "{% static 'umbrella.png' %}">
+        
+        </div>
+    </div>
+</div>
