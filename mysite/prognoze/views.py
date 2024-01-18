@@ -4,9 +4,9 @@ from django.shortcuts import render
 
 def op(request):
     dude =  s = (
-    "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&"
+    "https://api.open-meteo.com/v1/forecast?latitude=45.32154636314539&longitude=14.473822849484131&"
     "current=weather_code,temperature_2m,wind_speed_10m,wind_direction_10m&"
-    "hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability"
+    "hourly=weather_code,temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability"
     "&forecast_days=1"
     )
 
@@ -25,6 +25,7 @@ def op(request):
 
     
     weatherCode = r.json()['current']['weather_code']
+    sviKodovi = r.json()['hourly']['weather_code']
 
     slikicaVrime = "neznamovrime.png"
 
@@ -51,4 +52,4 @@ def op(request):
     elif str(weatherCode) == "95" or str(weatherCode) == "96" or str(weatherCode) == "99":
         slikicaVrime = "thunder.png"
     #return HttpResponse("Hello, world. You're at the polls index." + str(kanta)) 
-    return render(request, 'prognoza.html', {'current': current, 'max':max_, 'min':min_, 'wind_speed':wind_speed, 'kisa':kisa, 'slika':slikicaVrime})
+    return render(request, 'prognoza.html', {'current': current, 'max':max_, 'min':min_, 'wind_speed':wind_speed, 'kisa':kisa, 'slika':slikicaVrime, 'sviKodovi':sviKodovi})

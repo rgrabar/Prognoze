@@ -29,3 +29,42 @@
         </div>
     </div>
 </div>
+
+<div style="display: flex;">
+    {% for e in sviKodovi %}
+        {%if e == 0 %}
+            <div style="width:20px; height:20px; background-color:rgb(0, 217, 255)" >  </div>
+        {% elif e <= 48 %}
+            <div style="width:20px; height:20px; background-color:rgb(165, 165, 164)" >  </div>
+        {% elif e >= 51 and e <= 67 %}
+            <div style="width:20px; height:20px; background-color:rgb(0, 47, 255)" >  </div>
+        {% elif e >= 80 and e <= 82 %}
+            <div style="width:20px; height:20px; background-color:rgb(0, 47, 255)" >  </div>
+        {% elif e >= 71 and e <= 77 %}
+            <div style="width:20px; height:20px; background-color:rgb(0, 217, 255)" >  </div>
+        {% elif e >= 85 and e <= 86 %}
+            <div style="width:20px; height:20px; background-color:rgb(0, 217, 255)" >  </div>
+        {% elif e >= 95 and e <= 99 %}
+            <div style="width:20px; height:20px; background-color:rgb(255, 115, 0)" >  </div>
+        {% endif %}
+    {% endfor %}
+</div>
+<div style="display: flex;">
+    {% for e in sviKodovi %}
+        {% if forloop.counter0 == 0 %}
+            <div style="width:2px; height: 10px; margin-left:0px; background-color:rgb(0, 0, 0)"> </div>
+        {% endif %}
+        {% if forloop.counter0|divisibleby:4 %}
+            <div style="width:2px; height: 10px; margin-left:78px; background-color:rgb(0, 0, 0)"> </div>
+        {% endif %}
+    {% endfor %}
+</div>
+<div style="display: flex;">
+    {% for e in sviKodovi %}
+        {% if forloop.counter0 == 0 %}
+            <div style="width:2px;margin-left:0px;">0 </div>
+        {% elif forloop.counter0|divisibleby:4 %}
+            <div style="width:1px; margin-left:77px;"> {{forloop.counter0}} </div>
+        {% endif %}
+    {% endfor %}
+</div>
