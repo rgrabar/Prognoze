@@ -35,7 +35,7 @@ weather_images = {
 }
 
 def op(request):
-    dude =  s = (
+    dude = (
     "https://api.open-meteo.com/v1/forecast?latitude=45.32154636314539&longitude=14.473822849484131&"
     "current=weather_code,temperature_2m,wind_speed_10m,wind_direction_10m&"
     "hourly=weather_code,temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability"
