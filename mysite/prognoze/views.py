@@ -29,27 +29,28 @@ def op(request):
 
     slikicaVrime = "neznamovrime.png"
 
-    if str(weatherCode) == "0":
+    #todo: ma neki enum ili nec ca ni ovako umufljeno
+    if int(weatherCode) == 0:
         slikicaVrime = "sun.png"
-    elif str(weatherCode) == "1" or str(weatherCode) == "2" or str(weatherCode) == "3":
-        slikicaVrime = "cloud.png"
-    elif str(weatherCode) == "45" or str(weatherCode) == "48":
+    elif int(weatherCode) <= 3:
+        slikicaVrime = "cloud_sun.png"
+    elif int(weatherCode) <= 48:
         slikicaVrime = "magla.png"
-    elif str(weatherCode) == "51" or str(weatherCode) == "52" or str(weatherCode) == "53":
+    elif int(weatherCode) <= 53:
         slikicaVrime = "rain.png"
-    elif str(weatherCode) == "56" or str(weatherCode) == "57":
-        slikicaVrime = "snow.png"
-    elif str(weatherCode) == "61" or str(weatherCode) == "63" or str(weatherCode) == "65":
+    elif int(weatherCode) <= 57:
+        slikicaVrime = "rain_snow.png"
+    elif int(weatherCode) <= 65:
         slikicaVrime = "rain.png"
-    elif str(weatherCode) == "66" or str(weatherCode) == "67":
-        slikicaVrime = "rain.png"
-    elif str(weatherCode) == "71" or str(weatherCode) == "73" or str(weatherCode) == "75" or str(weatherCode) == "77":
+    elif int(weatherCode) <= 67:
+        slikicaVrime = "rain_snow.png"
+    elif int(weatherCode) <= 77:
         slikicaVrime = "pahulja.png"
-    elif str(weatherCode) == "80" or str(weatherCode) == "81" or str(weatherCode) == "82":
+    elif int(weatherCode) <= 82:
         slikicaVrime = "rain.png"
-    elif str(weatherCode) == "85" or str(weatherCode) == "86":
+    elif int(weatherCode) <= 86:
         slikicaVrime = "pahulja.png"
-    elif str(weatherCode) == "95" or str(weatherCode) == "96" or str(weatherCode) == "99":
-        slikicaVrime = "thunder.png"
+    elif int(weatherCode) <= 99:
+        slikicaVrime = "rain_thunder.png"
     #return HttpResponse("Hello, world. You're at the polls index." + str(kanta)) 
     return render(request, 'prognoza.html', {'current': current, 'max':max_, 'min':min_, 'wind_speed':wind_speed, 'kisa':kisa, 'slika':slikicaVrime, 'sviKodovi':sviKodovi})

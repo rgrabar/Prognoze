@@ -62,9 +62,10 @@
 <div style="display: flex;">
     {% for e in sviKodovi %}
         {% if forloop.counter0 == 0 %}
-            <div style="width:2px;margin-left:0px;">0 </div>
+            <div style="width:2px;margin-left:0px;">00:00 </div>
         {% elif forloop.counter0|divisibleby:4 %}
-            <div style="width:1px; margin-left:77px;"> {{forloop.counter0}} </div>
+            <div style="width:1px; margin-left:75px;"> {{forloop.counter0}}:00 </div>
         {% endif %}
     {% endfor %}
+    <div style="width:1px; margin-left:71px;"> 23:59 </div>
 </div>
