@@ -2,6 +2,38 @@ from django.http import HttpResponse, request
 import requests
 from django.shortcuts import render
 
+# ne znan kako ovo lipje nacinit :(
+weather_images = {
+    0:  'sun.png',                               # Clear sky
+    1:  'cloud_sun.png',                         # Mainly clear, partly cloudy, and overcast
+    2:  'cloud_sun.png',                         # Mainly clear, partly cloudy, and overcast
+    3:  'cloud.png',                         # Mainly clear, partly cloudy, and overcast
+    45: 'magla.png',
+    48: 'magla.png',
+    51: 'rain.png',
+    53: 'rain.png',
+    55: 'rain.png',
+    56: 'rain_snow.png',
+    57: 'rain_snow.png',
+    61: 'rain.png',
+    63: 'rain.png',
+    65: 'rain.png',
+    66: 'rain_snow.png',
+    67: 'rain_snow.png',
+    71: 'pahulja.png',
+    73: 'pahulja.png',
+    75: 'pahulja.png',
+    77: 'pahulja.png',
+    80: 'rain.png',
+    81: 'rain.png',
+    82: 'rain.png',
+    85: 'pahulja.png',
+    86: 'pahulja.png',
+    95: 'thunder.png',
+    96: 'rain_thunder.png',
+    99: 'rain_thunder.png',
+}
+
 def op(request):
     dude =  s = (
     "https://api.open-meteo.com/v1/forecast?latitude=45.32154636314539&longitude=14.473822849484131&"
@@ -29,28 +61,7 @@ def op(request):
 
     slikicaVrime = "neznamovrime.png"
 
-    #todo: ma neki enum ili nec ca ni ovako umufljeno
-    if int(weatherCode) == 0:
-        slikicaVrime = "sun.png"
-    elif int(weatherCode) <= 3:
-        slikicaVrime = "cloud_sun.png"
-    elif int(weatherCode) <= 48:
-        slikicaVrime = "magla.png"
-    elif int(weatherCode) <= 53:
-        slikicaVrime = "rain.png"
-    elif int(weatherCode) <= 57:
-        slikicaVrime = "rain_snow.png"
-    elif int(weatherCode) <= 65:
-        slikicaVrime = "rain.png"
-    elif int(weatherCode) <= 67:
-        slikicaVrime = "rain_snow.png"
-    elif int(weatherCode) <= 77:
-        slikicaVrime = "pahulja.png"
-    elif int(weatherCode) <= 82:
-        slikicaVrime = "rain.png"
-    elif int(weatherCode) <= 86:
-        slikicaVrime = "pahulja.png"
-    elif int(weatherCode) <= 99:
-        slikicaVrime = "rain_thunder.png"
-    #return HttpResponse("Hello, world. You're at the polls index." + str(kanta)) 
+    if int(weatherCode) in weather_images:
+        slikicaVrime = weather_images[int(weatherCode)]
+
     return render(request, 'prognoza.html', {'current': current, 'max':max_, 'min':min_, 'wind_speed':wind_speed, 'kisa':kisa, 'slika':slikicaVrime, 'sviKodovi':sviKodovi})
