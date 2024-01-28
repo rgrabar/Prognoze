@@ -1,13 +1,13 @@
 from django.http import HttpResponse, request
 import requests
 from django.shortcuts import render
-
+import json
 # ne znan kako ovo lipje nacinit :(
 weather_images = {
     0:  'sun.png',                               # Clear sky
-    1:  'cloud_sun.png',                         # Mainly clear, partly cloudy, and overcast
-    2:  'cloud_sun.png',                         # Mainly clear, partly cloudy, and overcast
-    3:  'cloud.png',                         # Mainly clear, partly cloudy, and overcast
+    1:  'cloud_sun.png',                         # Mainly clear
+    2:  'cloud_sun.png',                         # partly cloudy
+    3:  'cloud.png',                             # overcast
     45: 'magla.png',
     48: 'magla.png',
     51: 'rain.png',
@@ -35,7 +35,23 @@ weather_images = {
 }
 
 def op(request):
-    dude = (
+
+    weather_api_r = requests.get("http://api.weatherapi.com/v1/forecast.json?key=43ad9cc8b1ae40f08e6191643241301&q=45.32154636314539,14.473822849484131&days=1&aqi=no&alerts=no").json()
+    #print(weather_api_r)
+    current_temp_weather_api = weather_api_r['current']['temp_c']
+    current_wind_weather_api = weather_api_r['current']['wind_kph']
+    current_code_weather_api = weather_api_r['current']['condition']['code']
+    #print("!!!!!!!!! ", current_code_weather_api)
+
+    garbo = weather_api_r['forecast']
+
+    print(garbo['forecastday'][0]['hour'][0]['time'])
+
+
+
+
+
+    open_metro_link = (
     "https://api.open-meteo.com/v1/forecast?latitude=45.32154636314539&longitude=14.473822849484131&"
     "current=weather_code,temperature_2m,wind_speed_10m,wind_direction_10m&"
     "hourly=weather_code,temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability"
@@ -46,18 +62,15 @@ def op(request):
     now = datetime.datetime.now()
     #print(now.year, now.month, now.day, now.hour, now.minute, now.second)
 
-    r = requests.get(dude)
-    print(r.json())
-    kanta = r.json()
-    current = r.json()['current']['temperature_2m']
-    wind_speed = r.json()['current']['wind_speed_10m']
-    min_ = min(kanta['hourly']['temperature_2m']) 
-    max_ = max(kanta['hourly']['temperature_2m']) 
-    kisa = kanta['hourly']['precipitation_probability'][now.hour]
+    open_metro_r = requests.get(open_metro_link).json()
+    current = open_metro_r['current']['temperature_2m']
+    wind_speed = open_metro_r['current']['wind_speed_10m']
+    weatherCode = open_metro_r['current']['weather_code']
 
-    
-    weatherCode = r.json()['current']['weather_code']
-    sviKodovi = r.json()['hourly']['weather_code']
+    sviKodovi = open_metro_r['hourly']['weather_code']
+    min_ = min(open_metro_r['hourly']['temperature_2m']) 
+    max_ = max(open_metro_r['hourly']['temperature_2m']) 
+    kisa = open_metro_r['hourly']['precipitation_probability'][now.hour]
 
     slikicaVrime = "neznamovrime.png"
 
