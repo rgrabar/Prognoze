@@ -36,6 +36,9 @@ weather_images = {
 
 def op(request):
 
+    import datetime
+    now = datetime.datetime.now()
+
     weather_api_r = requests.get("http://api.weatherapi.com/v1/forecast.json?key=43ad9cc8b1ae40f08e6191643241301&q=45.32154636314539,14.473822849484131&days=1&aqi=no&alerts=no").json()
     #print(weather_api_r)
     current_temp_weather_api = weather_api_r['current']['temp_c']
@@ -45,9 +48,23 @@ def op(request):
 
     garbo = weather_api_r['forecast']
 
-    print(garbo['forecastday'][0]['hour'][0]['time'])
+    #print(garbo['forecastday'][0]['hour'][0]['condition']['code'])
 
+    all_codes_weather_api = []
 
+    min_weather_api = float('inf')
+    max_weather_api = float('-inf')
+
+    for x in garbo['forecastday'][0]['hour']:
+        all_codes_weather_api.append(x['condition']['code'])
+        min_weather_api = min(min_weather_api, x['temp_c'])
+        max_weather_api = max(max_weather_api, x['temp_c'])
+
+    kisa_weather_api = weather_api_r['forecast']['forecastday'][0]['hour'][now.hour]['chance_of_rain']
+
+    #print(kisa_weather_api)
+    #print(min_weather_api)
+    #print(max_weather_api)
 
 
 
@@ -58,8 +75,6 @@ def op(request):
     "&forecast_days=1"
     )
 
-    import datetime
-    now = datetime.datetime.now()
     #print(now.year, now.month, now.day, now.hour, now.minute, now.second)
 
     open_metro_r = requests.get(open_metro_link).json()
