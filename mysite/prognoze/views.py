@@ -6,32 +6,32 @@ import json
 weather_images = {
     0:  'sun.png',                               # Clear sky
     1:  'cloud_sun.png',                         # Mainly clear
-    2:  'cloud_sun.png',                         # partly cloudy
-    3:  'cloud.png',                             # overcast
-    45: 'magla.png',
-    48: 'magla.png',
-    51: 'rain.png',
-    53: 'rain.png',
-    55: 'rain.png',
-    56: 'rain_snow.png',
-    57: 'rain_snow.png',
-    61: 'rain.png',
-    63: 'rain.png',
-    65: 'rain.png',
-    66: 'rain_snow.png',
-    67: 'rain_snow.png',
-    71: 'pahulja.png',
-    73: 'pahulja.png',
-    75: 'pahulja.png',
-    77: 'pahulja.png',
-    80: 'rain.png',
-    81: 'rain.png',
-    82: 'rain.png',
-    85: 'pahulja.png',
-    86: 'pahulja.png',
-    95: 'thunder.png',
-    96: 'rain_thunder.png',
-    99: 'rain_thunder.png',
+    2:  'cloud_sun.png',                         # Partly cloudy
+    3:  'cloud.png',                             # Overcast
+    45: 'magla.png',                             # Fog
+    48: 'magla.png',                             # Depositing rime fog
+    51: 'rain.png',                              # Light drizzle
+    53: 'rain.png',                              # Moderate drizzle
+    55: 'rain.png',                              # Dense drizzle
+    56: 'rain_snow.png',                         # Light freezing drizzle
+    57: 'rain_snow.png',                         # Dense freezing drizzle
+    61: 'rain.png',                              # Slight rain
+    63: 'rain.png',                              # Moderate rain
+    65: 'rain.png',                              # Heavy rain
+    66: 'rain_snow.png',                         # Light freezing rain
+    67: 'rain_snow.png',                         # Heavy freezing rain
+    71: 'pahulja.png',                           # Slight snow fall
+    73: 'pahulja.png',                           # Moderate snow fall
+    75: 'pahulja.png',                           # Heavy snow fall
+    77: 'pahulja.png',                           # Snow grains
+    80: 'rain.png',                              # Slight rain shower
+    81: 'rain.png',                              # Moderate rain shower
+    82: 'rain.png',                              # Violent rain shower
+    85: 'pahulja.png',                           # Slight snow shower
+    86: 'pahulja.png',                           # Heavy snow shower
+    95: 'thunder.png',                           # Thunderstorm slight/moderate
+    96: 'rain_thunder.png',                      # Thunderstorm with slight hail 
+    99: 'rain_thunder.png',                      # Thunderstorm with heavy hail
 }
 
 def op(request):
