@@ -41,10 +41,21 @@ def op(request):
 
     weather_api_r = requests.get("http://api.weatherapi.com/v1/forecast.json?key=43ad9cc8b1ae40f08e6191643241301&q=45.32154636314539,14.473822849484131&days=1&aqi=no&alerts=no").json()
     #print(weather_api_r)
+
+    all_current_weather_temps = []
+    all_current_wind_speeds = []
+    all_min_temps = []
+    all_max_temps = []
+    all_rain_change = []
+
     current_temp_weather_api = weather_api_r['current']['temp_c']
     current_wind_weather_api = weather_api_r['current']['wind_kph']
+    #TODO make some avg?? for weather codes
     current_code_weather_api = weather_api_r['current']['condition']['code']
     #print("!!!!!!!!! ", current_code_weather_api)
+
+    all_current_weather_temps.append(current_temp_weather_api)
+    all_current_wind_speeds.append(current_wind_weather_api)
 
     garbo = weather_api_r['forecast']
 
@@ -62,11 +73,13 @@ def op(request):
 
     kisa_weather_api = weather_api_r['forecast']['forecastday'][0]['hour'][now.hour]['chance_of_rain']
 
+    all_min_temps.append(min_weather_api)
+    all_max_temps.append(max_weather_api)
+    all_rain_change.append(kisa_weather_api)
+
     #print(kisa_weather_api)
     #print(min_weather_api)
     #print(max_weather_api)
-
-
 
     open_metro_link = (
     "https://api.open-meteo.com/v1/forecast?latitude=45.32154636314539&longitude=14.473822849484131&"
@@ -87,9 +100,22 @@ def op(request):
     max_ = max(open_metro_r['hourly']['temperature_2m']) 
     kisa = open_metro_r['hourly']['precipitation_probability'][now.hour]
 
+    # Averages for everything
+    all_current_weather_temps.append(current)
+    all_current_wind_speeds.append(wind_speed)
+    all_min_temps.append(min_)
+    all_max_temps.append(max_)
+    all_rain_change.append(kisa)
+
     slikicaVrime = "neznamovrime.png"
 
     if int(weatherCode) in weather_images:
         slikicaVrime = weather_images[int(weatherCode)]
 
-    return render(request, 'prognoza.html', {'current': current, 'max':max_, 'min':min_, 'wind_speed':wind_speed, 'kisa':kisa, 'slika':slikicaVrime, 'sviKodovi':sviKodovi})
+    average_temp = round(sum(all_current_weather_temps) / len(all_current_weather_temps), 1)
+    average_wind = round(sum(all_current_wind_speeds) / len(all_current_wind_speeds), 1)
+    average_min_temps = round(sum(all_min_temps) / len(all_min_temps), 1)
+    average_max_temps = round(sum(all_max_temps) / len(all_max_temps), 1)
+    all_rain_change = round(sum(all_rain_change) / len(all_rain_change), 1)
+
+    return render(request, 'prognoza.html', {'current': average_temp, 'max':average_max_temps, 'min':average_min_temps, 'wind_speed':average_wind, 'kisa':all_rain_change, 'slika':slikicaVrime, 'sviKodovi':sviKodovi})
