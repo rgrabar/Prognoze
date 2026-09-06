@@ -1,71 +1,401 @@
-{% load static %}
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prognoze - {{ prognoza.location.title }}</title>
+    <link rel="stylesheet" href="{% static 'prognoza.css' %}">
+</head>
+<body>
+<div class="omot">
 
-<style>
-.box {
-    display: flex;
-    gap: 24px;
-}
-</style>
+    <form class="trazilica" method="get" action=".">
+        <input type="text" name="q" value="{{ query }}"
+               placeholder="Rijeka, Zagreb, Split..." aria-label="Mjesto">
+        <button type="submit">Trazi</button>
+    </form>
 
-<div class="box">
-    <img src = "{% static slika %}">
-    <div>
-        <div style = "font-size:48px">{{ current }}°C</div>
-        <div class = "box">
-            <div>min: {{ min }} °C</div>
+    {% if nema_podataka %}
+        <div class="upozorenje">
+            Nijedan izvor trenutno ne odgovara. Provjeri internet pa osvjezi.
         </div>
-        <div>max: {{ max }} °C</div>
+    {% endif %}
+
+    <div class="karta">
+        <div class="mjesto">
+            <h1>{{ prognoza.location.title }}</h1>
+            <span class="sitno">
+                {{ prognoza.local_time_label }} &middot;
+                prosjek {{ prognoza.used_sources }} izvora &middot;
+                <span class="odakle">{{ prognoza.location.source }}</span>
+            </span>
+            {% if moze_tocnije %}
+                <button type="button" id="tocnije" class="tocnije" hidden>
+                    Tocna lokacija
+                </button>
+            {% endif %}
+        </div>
+
+        <div class="sada">
+            <img class="vrime" src="{% static prognoza.icon %}"
+                 alt="{{ prognoza.condition_label }}"
+                 title="{{ prognoza.condition_label }}">
+
+            <div class="stupac">
+                <div class="veliko">{{ prognoza.temp_c|default_if_none:"?" }}&deg;C</div>
+                <div class="sitno">
+                    danas min {{ prognoza.min_c|default_if_none:"?" }}&deg;C
+                    &middot;
+                    max {{ prognoza.max_c|default_if_none:"?" }}&deg;C
+                </div>
+                {% if prognoza.spread_c %}
+                    <div class="sitno">
+                        izvori se razilaze za {{ prognoza.spread_c }}&deg;C
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="stupac">
+                <div class="podatak">
+                    <div class="veliko">{{ prognoza.wind_kph|default_if_none:"?" }}</div>
+                    <div>
+                        <div class="oznaka">km/h</div>
+                        {% if prognoza.wind_dir %}
+                            <img src="{% static prognoza.wind_dir|add:'.png' %}"
+                                 alt="vjetar iz smjera {{ prognoza.wind_dir }}"
+                                 title="vjetar puse iz smjera {{ prognoza.wind_dir }}">
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="podatak">
+                    <div class="veliko">{{ prognoza.precip_prob|default_if_none:"?" }}%</div>
+                    <img src="{% static 'umbrella.png' %}" alt="vjerojatnost kise"
+                         title="vjerojatnost oborina">
+                </div>
+
+                {% if prognoza.humidity is not None %}
+                    <div class="sitno">vlaga {{ prognoza.humidity }}%</div>
+                {% endif %}
+            </div>
+
+            {% if prognoza.uv is not None or zrak.ok %}
+                <div class="stupac">
+                    {% if prognoza.uv is not None %}
+                        <div>
+                            <div class="veliko" style="color: {{ prognoza.uv_color }}">
+                                {{ prognoza.uv|floatformat }}
+                            </div>
+                            <div class="oznaka">UV &middot; {{ prognoza.uv_label }}</div>
+                        </div>
+                    {% endif %}
+                    {% if zrak.ok %}
+                        <div title="{{ zrak.title }}">
+                            <div class="veliko" style="color: {{ zrak.color }}">
+                                {{ zrak.aqi|floatformat }}
+                            </div>
+                            <div class="oznaka">Zrak &middot; {{ zrak.label }}</div>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
     </div>
-    <div>
-        <div class = "box">
-            <div style = "font-size:48px">{{ wind_speed }} km/h</div>
-            <img style = "align-self: start;" src = "{% static 'E.png' %}">
+
+    <div class="karta">
+        <div class="oznaka">Po satima &middot; 8 unatrag, 16 unaprijed</div>
+
+        <div class="traka-omot">
+            <div class="traka" id="traka-sati">
+                {% for sat in prognoza.hours %}
+                    <div class="sat{% if not sat.sources %} prazno{% endif %}{% if sat.is_now %} trenutni{% endif %}{% if sat.is_past %} proslo{% endif %}{% if sat.starts_day %} novi-dan{% endif %}"
+                         title="{{ sat.title }}">
+                        <div class="kvadrat">
+                            {% if sat.sources %}
+                                <img src="{% static sat.icon %}"
+                                     alt="{{ sat.condition_label }}" loading="lazy">
+                            {% endif %}
+                        </div>
+                        <div class="cas">{{ sat.hour }}</div>
+                    </div>
+                {% endfor %}
+            </div>
         </div>
-        <div class = "box">
-            <div style = "font-size:48px">{{ kisa }}%</div>
-            <img width="40" height="40" style = "align-self: start;" src = "{% static 'umbrella.png' %}">
-        
-        </div>
+
+        {# Na mobitelu nema prelaska misem, pa se opis ispisuje ovdje. #}
+        <div class="detalj" data-detalj-za="traka-sati" aria-live="polite"></div>
     </div>
+
+    {% if prognoza.has_uv %}
+        <div class="karta">
+            <div class="uv-tijelo">
+                {% if prognoza.sunrise_label %}
+                    <div class="sunce">
+                        <div class="sunce-red">
+                            <img src="{% static 'sun.png' %}" alt="izlazak sunca">
+                            <div>
+                                <div class="sunce-vrijeme">{{ prognoza.sunrise_label }}</div>
+                                <div class="oznaka">izlazak</div>
+                            </div>
+                        </div>
+                        <div class="sunce-red">
+                            <img src="{% static 'moon.png' %}" alt="zalazak sunca">
+                            <div>
+                                <div class="sunce-vrijeme">{{ prognoza.sunset_label }}</div>
+                                <div class="oznaka">zalazak</div>
+                            </div>
+                        </div>
+                        <div class="sitno">dan traje {{ prognoza.day_length_label }}</div>
+                    </div>
+                {% endif %}
+
+                <div class="uv-glavni">
+                    {% comment %}
+                        Naslov ide uz graf, a ne iznad cijele kartice -
+                        inace bi stajao nad podacima o suncu, koje ne
+                        opisuje. ({# #} radi samo u jednom retku.)
+                    {% endcomment %}
+                    <div class="uv-zaglavlje">
+                        <div class="oznaka">UV indeks danas</div>
+                        {% if prognoza.uv_peak_hour %}
+                            <div class="uv-vrhunac">
+                                najvise <strong style="color: {{ prognoza.uv_max_color }}">{{ prognoza.uv_max }}</strong>
+                                ({{ prognoza.uv_max_label }}) u {{ prognoza.uv_peak_hour.label }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="uv-graf">
+                        <svg viewBox="0 0 {{ prognoza.uv_view_width }} 100"
+                             preserveAspectRatio="none"
+                             role="img" aria-label="UV indeks po satima">
+                            <defs>
+                                <linearGradient id="uv-boje" x1="0" y1="1" x2="0" y2="0">
+                                    {% for offset, boja in prognoza.uv_gradient_stops %}
+                                        <stop offset="{{ offset }}%" stop-color="{{ boja }}"/>
+                                    {% endfor %}
+                                </linearGradient>
+                            </defs>
+                            <polygon points="{{ prognoza.uv_area_points }}"
+                                     fill="url(#uv-boje)" opacity="0.28"/>
+                            <polyline points="{{ prognoza.uv_line_points }}"
+                                      fill="none" stroke="url(#uv-boje)"
+                                      stroke-width="2" stroke-linejoin="round"
+                                      stroke-linecap="round"
+                                      vector-effect="non-scaling-stroke"/>
+                        </svg>
+
+                        {# Nevidljiva mreza preko grafa - samo za opise pri prelasku misem. #}
+                        <div class="uv-mreza" id="uv-mreza"
+                             style="grid-template-columns: repeat({{ prognoza.uv_hours|length }}, 1fr)">
+                            {% for sat in prognoza.uv_hours %}
+                                <div class="uv-celija{% if sat.is_now %} trenutni{% endif %}"
+                                     title="{{ sat.uv_title }}"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% comment %}
+                        Svaki sat dobiva svoj stupac, a natpis se ispisuje
+                        samo svaki treci. Prazni stupci drze poravnanje -
+                        raspon vise ne pocinje nuzno u 00, pa se na spajanje
+                        po tri stupca ne moze racunati.
+                    {% endcomment %}
+                    <div class="uv-satnice"
+                         style="grid-template-columns: repeat({{ prognoza.uv_hours|length }}, 1fr)">
+                        {% for sat in prognoza.uv_hours %}
+                            <span>{% if sat.hour|divisibleby:3 %}{{ sat.hour }}{% endif %}</span>
+                        {% endfor %}
+                    </div>
+
+                    <div class="detalj" data-detalj-za="uv-mreza" aria-live="polite"></div>
+                </div>
+
+                {% if prognoza.days %}
+                    <div class="pet-dana">
+                        <div class="oznaka">Sljedeci dani</div>
+                        {% for dan in prognoza.days %}
+                            <div class="dan" title="{{ dan.title }}">
+                                <span class="dan-ime">{{ dan.label }}</span>
+                                <img src="{% static dan.icon %}"
+                                     alt="{{ dan.condition_label }}" loading="lazy">
+                                <span class="dan-temp">
+                                    {{ dan.max_c|default_if_none:"?" }}&deg;
+                                    <span class="sitno">{{ dan.min_c|default_if_none:"?" }}&deg;</span>
+                                </span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <p class="suncanje">
+                {% if prognoza.tanning_label %}
+                    <strong>Najbolji sati za suncanje:</strong>
+                    {{ prognoza.tanning_label }}
+                    <span class="sitno">
+                        &mdash; tada je UV izmedu {{ tan_min|floatformat:0 }} i
+                        {{ tan_max|floatformat:0 }}: dovoljno da koza potamni,
+                        a jos ne toliko da brzo izgori. Koliko brzo tko
+                        pocrveni ovisi o tipu koze.
+                    </span>
+                {% else %}
+                    <strong>Danas nema sati pogodnih za suncanje.</strong>
+                    <span class="sitno">
+                        Nijedan sat nema UV izmedu
+                        {{ tan_min|floatformat:0 }} i
+                        {{ tan_max|floatformat:0 }} &mdash; ili je preslab da
+                        koza potamni, ili prejak da bude ugodno.
+                    </span>
+                {% endif %}
+            </p>
+        </div>
+    {% endif %}
+
+    <div class="karta">
+        <div class="oznaka">Izvori</div>
+        <ul class="izvori">
+            {% for izvor in prognoza.sources %}
+                <li>
+                    <span class="ime">{{ izvor.label }}</span>
+                    {% if izvor.ok %}
+                        <span>{{ izvor.temp_c|default_if_none:"?" }}&deg;C</span>
+                        <span class="sitno">{{ izvor.condition_label }}</span>
+                    {% else %}
+                        <span class="pao">nedostupan</span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
 </div>
 
-<div style="display: flex;">
-    {% for e in sviKodovi %}
-        {%if e <= 1 %}
-            <div style="width:20px; height:20px; background-color:rgb(0, 217, 255)" >  </div>
-        {% elif e <= 48 %}
-            <div style="width:20px; height:20px; background-color:rgb(165, 165, 164)" >  </div>
-        {% elif e >= 51 and e <= 67 %}
-            <div style="width:20px; height:20px; background-color:rgb(0, 47, 255)" >  </div>
-        {% elif e >= 80 and e <= 82 %}
-            <div style="width:20px; height:20px; background-color:rgb(0, 47, 255)" >  </div>
-        {% elif e >= 71 and e <= 77 %}
-            <div style="width:20px; height:20px; background-color:rgb(0, 217, 255)" >  </div>
-        {% elif e >= 85 and e <= 86 %}
-            <div style="width:20px; height:20px; background-color:rgb(0, 217, 255)" >  </div>
-        {% elif e >= 95 and e <= 99 %}
-            <div style="width:20px; height:20px; background-color:rgb(255, 115, 0)" >  </div>
-        {% endif %}
-    {% endfor %}
-</div>
-<div style="display: flex;">
-    {% for e in sviKodovi %}
-        {% if forloop.counter0 == 0 %}
-            <div style="width:2px; height: 10px; margin-left:0px; background-color:rgb(0, 0, 0)"> </div>
-        {% endif %}
-        {% if forloop.counter0|divisibleby:4 %}
-            <div style="width:2px; height: 10px; margin-left:78px; background-color:rgb(0, 0, 0)"> </div>
-        {% endif %}
-    {% endfor %}
-</div>
-<div style="display: flex;">
-    {% for e in sviKodovi %}
-        {% if forloop.counter0 == 0 %}
-            <div style="width:2px;margin-left:0px;">00:00 </div>
-        {% elif forloop.counter0|divisibleby:4 %}
-            <div style="width:1px; margin-left:75px;"> {{forloop.counter0}}:00 </div>
-        {% endif %}
-    {% endfor %}
-    <div style="width:1px; margin-left:71px;"> 23:59 </div>
-</div>
+<script>
+// Opis sata ispod trake i ispod UV grafa.
+//
+// Na racunalu je dovoljan `title`, ali mobitel nema prelazak misem pa se
+// tamo taj opis nikad ne vidi. Zato se isti tekst ispisuje i u redak ispod:
+// na dodir (mobitel) i na prelazak misem (racunalo).
+//
+// `title` namjerno ostaje u HTML-u - ako JavaScript ne radi, opis se na
+// racunalu i dalje vidi kao obicni oblacic.
+(function () {
+    function povezi(mreza, redak) {
+        var polja = Array.prototype.slice.call(
+            mreza.querySelectorAll("[title]")
+        );
+        if (!polja.length) {
+            return;
+        }
+
+        function opis(polje) {
+            return (polje.getAttribute("title") || "").replace(/ \| /g, " · ");
+        }
+
+        // Bez ikakvog dodira pise trenutni sat - da redak nikad ne stoji prazan.
+        var zadano = mreza.querySelector(".trenutni") || polja[0];
+
+        function prikazi(polje) {
+            redak.textContent = opis(polje);
+            polja.forEach(function (ostalo) {
+                ostalo.classList.toggle("odabran", ostalo === polje);
+            });
+        }
+
+        function vrati() {
+            redak.textContent = opis(zadano);
+            polja.forEach(function (polje) {
+                polje.classList.remove("odabran");
+            });
+        }
+
+        polja.forEach(function (polje) {
+            polje.addEventListener("pointerenter", function () {
+                prikazi(polje);
+            });
+            // Dodir na mobitelu; na racunalu klik samo potvrdi isto polje.
+            polje.addEventListener("click", function () {
+                prikazi(polje);
+            });
+        });
+
+        // Kad mis ode s trake, vrati se na trenutni sat. Na dodir se odabir
+        // zadrzava - tamo nema "odlaska misa" pa bi tekst nestao odmah.
+        mreza.addEventListener("pointerleave", function (dogadaj) {
+            if (dogadaj.pointerType === "mouse") {
+                vrati();
+            }
+        });
+
+        vrati();
+    }
+
+    var redci = document.querySelectorAll("[data-detalj-za]");
+    Array.prototype.forEach.call(redci, function (redak) {
+        var mreza = document.getElementById(
+            redak.getAttribute("data-detalj-za")
+        );
+        if (mreza) {
+            povezi(mreza, redak);
+        }
+    });
+})();
+</script>
+
+{% if moze_tocnije %}
+<script>
+// Mjesto je zasad odredeno po IP adresi, sto pogodi grad ali ne i cetvrt.
+// Preglednik zna tocnije, ali samo uz dopustenje korisnika.
+//
+// Ako je dopustenje vec dano, lokacija se dohvaca i stranica se sama
+// osvjezi s koordinatama. Ako nije, ne otvaramo prozorcic sami od sebe -
+// pojavi se gumb, pa neka covjek odluci.
+(function () {
+    var gumb = document.getElementById("tocnije");
+    if (!gumb || !navigator.geolocation) {
+        return;
+    }
+
+    function otvori(position) {
+        var url = new URL(window.location.href);
+        url.searchParams.set("lat", position.coords.latitude.toFixed(4));
+        url.searchParams.set("lon", position.coords.longitude.toFixed(4));
+        url.searchParams.delete("q");
+        window.location.replace(url.toString());
+    }
+
+    function trazi() {
+        gumb.disabled = true;
+        gumb.textContent = "Trazim...";
+        navigator.geolocation.getCurrentPosition(otvori, function (error) {
+            gumb.disabled = false;
+            gumb.textContent = "Nije uspjelo, probaj opet";
+            console.warn("Geolokacija odbijena ili nedostupna:", error.message);
+        }, { timeout: 10000, maximumAge: 600000 });
+    }
+
+    gumb.addEventListener("click", trazi);
+
+    // Ako je dopustenje vec dano, ucini to bez pitanja i bez gumba.
+    if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: "geolocation" }).then(function (status) {
+            if (status.state === "granted") {
+                navigator.geolocation.getCurrentPosition(otvori, function () {
+                    gumb.hidden = false;
+                });
+            } else if (status.state === "prompt") {
+                gumb.hidden = false;
+            }
+            // "denied" - gumb ostaje skriven, nema smisla nuditi.
+        }).catch(function () {
+            gumb.hidden = false;
+        });
+    } else {
+        gumb.hidden = false;
+    }
+})();
+</script>
+{% endif %}
+</body>
+</html>

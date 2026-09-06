@@ -1,0 +1,521 @@
+:root {
+    --tekst: #1b1b1f;
+    --slabo: #6b6b76;
+    --linija: #e2e2e8;
+    --karta: #ffffff;
+    --pozadina: #f4f5f8;
+
+    /* Traka po satima. Svi sati su ista plava - stanje vremena govori
+       slikica, pa boja podloge ne mora nista dodatno znaciti. */
+    --sat-plava: #e7f2fb;
+    --sat-plava-sada: #bcdefa;
+    --sat-plava-odabran: #93c9f2;
+    --sat-rub-sada: #1f7fd0;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--pozadina);
+    color: var(--tekst);
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+}
+
+.omot {
+    max-width: 880px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* --- trazilica --- */
+
+.trazilica {
+    display: flex;
+    gap: 8px;
+}
+
+.trazilica input {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 16px;
+    border: 1px solid var(--linija);
+    border-radius: 8px;
+    background: var(--karta);
+    color: inherit;
+}
+
+.trazilica button {
+    padding: 10px 18px;
+    font-size: 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--tekst);
+    color: var(--karta);
+    cursor: pointer;
+}
+
+/* --- karta --- */
+
+.karta {
+    background: var(--karta);
+    border: 1px solid var(--linija);
+    border-radius: 14px;
+    padding: 20px;
+}
+
+.mjesto {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.mjesto h1 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.mjesto .sitno {
+    color: var(--slabo);
+    font-size: 14px;
+}
+
+.odakle {
+    font-style: italic;
+}
+
+.tocnije {
+    padding: 5px 12px;
+    font-size: 13px;
+    border: 1px solid var(--linija);
+    border-radius: 999px;
+    background: var(--pozadina);
+    color: var(--tekst);
+    cursor: pointer;
+}
+
+.tocnije:hover:not(:disabled) {
+    border-color: var(--slabo);
+}
+
+.tocnije:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* --- glavni brojevi --- */
+
+.sada {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+    margin-top: 12px;
+}
+
+.sada img.vrime {
+    width: 96px;
+    height: 96px;
+    object-fit: contain;
+}
+
+.veliko {
+    font-size: 48px;
+    line-height: 1.1;
+    font-weight: 600;
+}
+
+.podatak {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.podatak img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+.oznaka {
+    color: var(--slabo);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.stupac {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* --- traka po satima --- */
+
+/* Na uskom zaslonu 24 slikice ne stanu citljivo, pa se traka vodoravno
+   pomice umjesto da se slikice smanje u mrlje. */
+.traka-omot {
+    margin-top: 10px;
+    overflow-x: auto;
+    /* Mjesta gore i dolje da uvecani trenutni sat ne bude odrezan. */
+    padding: 7px 0;
+}
+
+.traka {
+    display: grid;
+    grid-template-columns: repeat(24, minmax(26px, 1fr));
+    gap: 3px;
+    min-width: 100%;
+    /* Svi sati krecu od istog vrha. Bez ovoga se rastezu do visine retka,
+       a trenutni (koji se ne rasteze) ostane poravnat po dnu i visi nize
+       od ostalih. */
+    align-items: start;
+}
+
+.traka .sat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+.traka .kvadrat {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--sat-plava);
+}
+
+.traka .kvadrat img {
+    width: 84%;
+    height: 84%;
+    object-fit: contain;
+}
+
+.traka .sat.prazno .kvadrat {
+    background: repeating-linear-gradient(
+        45deg,
+        #ededf1,
+        #ededf1 3px,
+        #f7f7fa 3px,
+        #f7f7fa 6px
+    );
+}
+
+/* Trenutni sat je vidljivo veci, ali se povecava transformacijom, ne
+   visinom - tako ostane u istom redu s ostalima i brojke ispod se ne
+   pomaknu.
+
+   Klasa se zove `trenutni`, a ne `sada`: `.sada` je vec ime glavne kartice
+   gore, pa bi ovaj kvadratic pokupio njezin `margin-top` i visio nize. */
+.traka .sat.trenutni .kvadrat {
+    background-color: var(--sat-plava-sada);
+    border: 2px solid var(--sat-rub-sada);
+    transform: scale(1.3);
+    position: relative;
+    z-index: 1;
+}
+
+/* Prosli sati su tu za kontekst, ne kao prognoza - zato blijedi. */
+.traka .sat.proslo {
+    opacity: 0.45;
+}
+
+/* Prozor prelazi ponoc, pa se tu povuce crta da se vidi gdje pocinje
+   drugi dan. Crta je apsolutno pozicionirana u razmak izmedu dva sata -
+   da ne uzima sirinu, jer bi inace taj kvadratic ispao uzi (a s njim i
+   nizi, zbog aspect-ratio) od ostalih. */
+.traka .sat.novi-dan {
+    position: relative;
+}
+
+.traka .sat.novi-dan::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--linija);
+}
+
+.traka .sat.trenutni .cas {
+    color: var(--sat-rub-sada);
+    font-weight: 700;
+}
+
+.traka .cas {
+    font-size: 10px;
+    color: var(--slabo);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- opis odabranog sata --- */
+
+.detalj {
+    margin-top: 8px;
+    min-height: 18px;
+    font-size: 13px;
+    color: var(--slabo);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Na dodir nema oblacica, pa polja moraju izgledati kao da se na njih
+   moze pritisnuti. */
+.traka .sat,
+.uv-celija {
+    cursor: pointer;
+}
+
+.traka .sat.odabran .kvadrat {
+    outline: 2px solid var(--slabo);
+    outline-offset: 1px;
+}
+
+/* Trenutni sat vec ima plavi okvir. Dodati mu jos i outline znaci dva
+   prstena jedan oko drugoga - zato se odabir kod njega pokazuje jacom
+   ispunom, a okvir ostaje jedan. */
+.traka .sat.trenutni.odabran .kvadrat {
+    outline: none;
+    background-color: var(--sat-plava-odabran);
+}
+
+.uv-celija.odabran {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+/* --- UV graf --- */
+
+/* Ovdje boja nesto znaci, za razliku od trake po satima gdje znacenje nosi
+   slikica: ovo su sluzbeni razredi UV indeksa po WHO-u. */
+.uv-zaglavlje {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.uv-vrhunac {
+    font-size: 13px;
+    color: var(--slabo);
+}
+
+/* Sunce lijevo, graf desno; na uskom zaslonu jedno ispod drugoga. */
+.uv-tijelo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 20px;
+    margin-top: 4px;
+}
+
+.uv-glavni {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.uv-graf {
+    position: relative;
+    height: 45px;
+    border-bottom: 1px solid var(--linija);
+}
+
+.uv-graf svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Mreza je prozirna i lezi preko grafa - sluzi samo da svaki sat ima svoj
+   opis pri prelasku misem. */
+.uv-mreza {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+}
+
+.uv-celija.trenutni {
+    background: rgba(31, 127, 208, 0.12);
+}
+
+/* Ovo pravilo mora doci poslije `.trenutni`, inace ga ono nadjaca (ista
+   tezina, a definirano je nize) pa odabir trenutnog sata ne bi imao odziv. */
+.uv-celija.trenutni.odabran {
+    background: rgba(31, 127, 208, 0.26);
+}
+
+/* --- izlazak i zalazak sunca --- */
+
+.sunce {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 20px;
+    border-right: 1px solid var(--linija);
+}
+
+.sunce-red {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sunce-red img {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+}
+
+.sunce-vrijeme {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+/* Broj stupaca postavlja predlozak - raspon sati ovisi o dobu godine. */
+.uv-satnice {
+    display: grid;
+    gap: 2px;
+    margin-top: 5px;
+    font-size: 10px;
+    color: var(--slabo);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* --- pet dana --- */
+
+.pet-dana {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 20px;
+    border-left: 1px solid var(--linija);
+}
+
+.pet-dana .dan {
+    display: grid;
+    grid-template-columns: 44px 26px auto;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.pet-dana .dan img {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+}
+
+.dan-ime {
+    font-size: 13px;
+    color: var(--slabo);
+}
+
+.dan-temp {
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Kad se tri stupca sloze jedan ispod drugoga, okomite crte nemaju
+   smisla - postaju vodoravne.
+
+   Ovo mora doci POSLIJE `.sunce` i `.pet-dana`, inace ga oni nadjacaju:
+   ista tezina, a definirani su nize u datoteci. */
+@media (max-width: 860px) {
+    .sunce {
+        width: 100%;
+        padding-right: 0;
+        border-right: 0;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--linija);
+    }
+
+    .pet-dana {
+        width: 100%;
+        padding-left: 0;
+        border-left: 0;
+        padding-top: 12px;
+        border-top: 1px solid var(--linija);
+    }
+}
+
+.suncanje {
+    margin: 14px 0 0;
+    font-size: 14px;
+    line-height: 1.55;
+    padding-top: 12px;
+    border-top: 1px solid var(--linija);
+}
+
+.suncanje .sitno {
+    color: var(--slabo);
+    font-size: 12px;
+}
+
+/* --- izvori --- */
+
+.izvori {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.izvori li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--linija);
+}
+
+.izvori li:last-child {
+    border-bottom: 0;
+}
+
+.izvori .ime {
+    flex: 1;
+    min-width: 180px;
+}
+
+.izvori .pao {
+    color: #b3261e;
+    font-size: 13px;
+}
+
+.upozorenje {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #fff3cd;
+    border: 1px solid #ffe08a;
+}
+
+@media (max-width: 520px) {
+    .veliko {
+        font-size: 38px;
+    }
+
+    .sada {
+        gap: 16px;
+    }
+}
