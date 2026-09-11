@@ -4,7 +4,9 @@ Prijevod kodova i usrednjavanje su cista logika, pa se daju testirati bez
 ijednog HTTP poziva - a bas tu se najlakse potkrade greska.
 """
 
+import json
 import os
+import struct
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -243,6 +245,57 @@ class SevenTimerTests(SimpleTestCase):
         # "VR" znaci promjenjiv vjetar - nema smisla u prosjeku.
         self.assertIsNone(compass_to_degrees("VR"))
         self.assertIsNone(compass_to_degrees(None))
+
+
+class HomeScreenIconTests(SimpleTestCase):
+    """Ikone za "dodaj na pocetni zaslon" na Androidu i iOS-u."""
+
+    STATIC = Path(settings.STATICFILES_DIRS[0])
+
+    def _png_size(self, path):
+        # Sirina i visina stoje u IHDR bloku, odmah iza 8-bajtnog potpisa.
+        with open(path, "rb") as f:
+            data = f.read(32)
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n", "{0} nije PNG".format(path))
+        return struct.unpack(">II", data[16:24])
+
+    def _png_has_alpha(self, path):
+        with open(path, "rb") as f:
+            data = f.read(32)
+        # Tip boje 4 i 6 imaju alfu.
+        return data[25] in (4, 6)
+
+    def test_manifest_je_valjan_i_ikone_postoje(self):
+        with open(self.STATIC / "manifest.json", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        self.assertEqual(manifest["start_url"], "/prognoze/")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertTrue(manifest["icons"])
+
+        for icon in manifest["icons"]:
+            with self.subTest(ikona=icon["src"]):
+                ime = icon["src"].rsplit("/", 1)[-1]
+                path = self.STATIC / ime
+                self.assertTrue(path.is_file(), "nedostaje {0}".format(ime))
+                # Deklarirana velicina mora odgovarati stvarnoj.
+                sirina, visina = self._png_size(path)
+                self.assertEqual(
+                    icon["sizes"], "{0}x{1}".format(sirina, visina)
+                )
+
+    def test_ios_ikona_je_kvadratna_i_neprozirna(self):
+        # iOS ispod prozirnih piksela stavi crno - ikona mora biti bez alfe.
+        path = self.STATIC / "apple-touch-icon.png"
+        self.assertTrue(path.is_file())
+        sirina, visina = self._png_size(path)
+        self.assertEqual((sirina, visina), (180, 180))
+        self.assertFalse(self._png_has_alpha(path), "iOS ikona ne smije imati alfu")
+
+    def test_android_ikone_su_dovoljno_velike(self):
+        velicine = {self._png_size(self.STATIC / ime)[0] for ime in ("icon-192.png", "icon-512.png")}
+        self.assertIn(192, velicine)
+        self.assertIn(512, velicine)
 
 
 class CssVersionTests(SimpleTestCase):

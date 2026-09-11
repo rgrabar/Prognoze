@@ -10,6 +10,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Prognoze - {{ prognoza.location.title }}</title>
     <link rel="icon" type="image/png" href="{% static 'umbrella.png' %}">
+
+    {% comment %}
+        Ikona za pocetni zaslon. Obicni favicon za to nije dovoljan:
+        iOS cita `apple-touch-icon` (i ispod prozirnog stavi crno, pa je
+        ta slika neprozirna), a Android instalira iz manifesta i trazi
+        192 i 512 px. Sve tri su generirane iz umbrella.png.
+    {% endcomment %}
+    <link rel="apple-touch-icon" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <meta name="theme-color" content="#1f7fd0">
+    <meta name="application-name" content="Prognoze">
+    <meta name="apple-mobile-web-app-title" content="Prognoze">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
     <link rel="stylesheet" href="{% static 'prognoza.css' %}?v={{ css_v }}">
 </head>
 <body>

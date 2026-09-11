@@ -439,6 +439,22 @@ neka stanja dijele istu slikicu jer je nemamo zasebnu:
 |---|---|
 | `moon_small_cloud.png` | nocna inacica za "pretezno vedro" (sad dijeli `cloud_moon.png` s "djelomicno oblacno") |
 
+### Ikona na pocetnom zaslonu
+
+Za "dodaj na pocetni zaslon" obicni favicon nije dovoljan, pa uz
+`umbrella.png` (kartica preglednika) postoje jos tri slike napravljene iz
+njega, kvadratne i s bijelom podlogom:
+
+| Datoteka | Za koga | Zasto bas takva |
+|---|---|---|
+| `apple-touch-icon.png` (180 px) | iOS | iOS ispod prozirnih piksela stavi **crno** - zato bez alfe |
+| `icon-192.png`, `icon-512.png` | Android, preko `manifest.json` | Android bez manifesta ne nudi "instaliraj"; kod "maskable" reze u krug, pa kisobran stoji u sredini s rubom |
+
+Podloga je bijela jer i sam `umbrella.png` ima bijelu, neprozirnu pozadinu
+(ne prozirnu) - na plavoj bi se vidio bijeli pravokutnik. Ako se kisobran
+promijeni, tri ikone treba ponovno generirati; test provjerava da postoje,
+da su deklarirane velicine tocne i da iOS ikona nema alfu.
+
 `tornado.png` postoji, ali se **ne koristi**: nijedan izvor ne javlja
 tornado. Open-Meteo koristi skraceni skup WMO kodova bez njega, WeatherAPI
 i Tomorrow.io ga nemaju u svojim kodovima, met.no i 7Timer takoder. Stanje

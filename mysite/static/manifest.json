@@ -1,0 +1,31 @@
+{
+  "name": "Prognoze",
+  "short_name": "Prognoze",
+  "description": "Vremenska prognoza usrednjena iz vise neovisnih izvora",
+  "lang": "hr",
+  "start_url": "/prognoze/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f8",
+  "theme_color": "#1f7fd0",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
