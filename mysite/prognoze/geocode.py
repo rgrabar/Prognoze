@@ -14,6 +14,8 @@ import ipaddress
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from django.core.cache import cache
@@ -22,8 +24,17 @@ logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://geocoding-api.open-meteo.com/v1/search"
 OFFSET_URL = "https://api.open-meteo.com/v1/forecast"
-IP_LOOKUP_URL = "https://ipwho.is/"
-REVERSE_URL = "https://api.bigdatacloud.net/data/reverse-geocode-client"
+# Obje usluge su na popisu dopustenih domena besplatnog PythonAnywherea.
+# Prethodne (ipwho.is, bigdatacloud) nisu bile, pa su ondje padale.
+IP_LOOKUP_URL = "https://ipinfo.io/{0}/json"
+REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
+
+# Nominatim trazi posten User-Agent; bez njega vraca 403.
+USER_AGENT = "Prognoze/1.0 (osobni projekt)"
+
+# Neuspjeh se pamti kratko - da se blokirana ili pala usluga ne zove na
+# svaki zahtjev, ali i da se brzo oporavi kad proradi.
+FAILURE_CACHE_SECONDS = 600
 
 HTTP_TIMEOUT = 6
 LOCATION_CACHE_SECONDS = 24 * 3600
@@ -45,6 +56,9 @@ class Location:
     # Pomak lokalnog vremena mjesta u odnosu na UTC. Treba izvorima koji
     # vracaju lokalno vrijeme bez oznake zone (wttr.in, WeatherAPI).
     utc_offset_seconds: int = 0
+    # Naziv zone (npr. "Europe/Zagreb"). Sve tri usluge ga vrate uz mjesto,
+    # pa se pomak iz njega izracuna bez ijednog dodatnog zahtjeva.
+    timezone: str = ""
     source: str = BY_DEFAULT
 
     @property
@@ -58,7 +72,27 @@ DEFAULT_LOCATION = Location(
     country="Hrvatska",
     latitude=45.32154636314539,
     longitude=14.473822849484131,
+    timezone="Europe/Zagreb",
 )
+
+
+def offset_from_timezone(name):
+    """"Europe/Zagreb" -> pomak u sekundama, ili None ako zona nije poznata.
+
+    Ovo je brzi put: sve tri usluge (geocoding, ipinfo.io, prijedlozi u
+    pregledniku) vec vrate naziv zone uz mjesto, pa se pomak dobije bez
+    dodatnog HTTP zahtjeva. `utc_offset_for` ostaje samo kao rezerva.
+    """
+    if not name:
+        return None
+    try:
+        zona = ZoneInfo(str(name))
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        logger.warning("Nepoznata vremenska zona: %s", name)
+        return None
+
+    pomak = datetime.now(timezone.utc).astimezone(zona).utcoffset()
+    return None if pomak is None else int(pomak.total_seconds())
 
 
 def utc_offset_for(latitude, longitude):
@@ -122,6 +156,7 @@ def search(query):
         country=hit.get("country") or "",
         latitude=float(hit["latitude"]),
         longitude=float(hit["longitude"]),
+        timezone=hit.get("timezone") or "",
     )
     cache.set(key, location, LOCATION_CACHE_SECONDS)
     return location
@@ -150,10 +185,43 @@ def ip_lookup_enabled():
     return os.environ.get("PROGNOZE_IP_LOOKUP", "1") != "0"
 
 
+def parse_ipinfo(payload):
+    """Odgovor ipinfo.io -> Location, ili None ako nema koordinata.
+
+    Koordinate stizu kao jedan tekst "45.49,15.55", a drzava kao
+    dvoslovna oznaka ("HR"), ne ime.
+    """
+    if not isinstance(payload, dict) or payload.get("bogon"):
+        return None
+
+    try:
+        lat_text, lon_text = str(payload.get("loc", "")).split(",")
+        latitude, longitude = float(lat_text), float(lon_text)
+    except (TypeError, ValueError):
+        return None
+
+    return Location(
+        name=payload.get("city") or payload.get("region") or "Nepoznato",
+        country=payload.get("country") or "",
+        latitude=latitude,
+        longitude=longitude,
+        timezone=payload.get("timezone") or "",
+        source=BY_IP,
+    )
+
+
+# Sto se sprema u cache kad usluga ne uspije - da se razlikuje od "nema
+# u cacheu" (None), a ne trosi zahtjev na svaki posjet.
+#
+# Namjerno tekst, a ne `object()`: cache vrijednosti sprema pickleom, pa
+# bi iz njega izasao *novi* objekt i usporedba po identitetu bi pala.
+_NOT_FOUND = "__nije_nadjeno__"
+
+
 def from_ip(ip):
     """Priblizno mjesto iz IP adrese. Vraca Location ili None.
 
-    Ovo salje posjetiteljevu IP adresu vanjskoj usluzi (ipwho.is). Zato se
+    Ovo salje posjetiteljevu IP adresu vanjskoj usluzi (ipinfo.io). Zato se
     radi samo za javne adrese, rezultat se pamti nekoliko sati, a cijela se
     stvar da ugasiti varijablom okoline.
     """
@@ -162,42 +230,52 @@ def from_ip(ip):
 
     key = "prognoze:ip:{0}".format(ip)
     cached = cache.get(key)
+    if cached == _NOT_FOUND:
+        return None
     if cached is not None:
         return cached
 
     try:
         response = requests.get(
-            IP_LOOKUP_URL + ip, timeout=HTTP_TIMEOUT
+            IP_LOOKUP_URL.format(ip),
+            headers={"Accept": "application/json", "User-Agent": USER_AGENT},
+            timeout=HTTP_TIMEOUT,
         )
         response.raise_for_status()
-        payload = response.json()
+        location = parse_ipinfo(response.json())
     except Exception as error:
         logger.warning("Trazenje po IP-u nije uspjelo: %s", error)
-        return None
+        location = None
 
-    if not payload.get("success"):
-        logger.info(
-            "IP %s nije lociran: %s", ip, payload.get("message", "bez razloga")
-        )
-        return None
-
-    try:
-        location = Location(
-            name=payload.get("city") or payload.get("region") or "Nepoznato",
-            country=payload.get("country") or "",
-            latitude=float(payload["latitude"]),
-            longitude=float(payload["longitude"]),
-            source=BY_IP,
-        )
-    except (KeyError, TypeError, ValueError):
+    if location is None:
+        cache.set(key, _NOT_FOUND, FAILURE_CACHE_SECONDS)
         return None
 
     cache.set(key, location, IP_CACHE_SECONDS)
     return location
 
 
+def parse_nominatim(payload):
+    """Odgovor Nominatima -> (ime, drzava). Nominatim naselje javlja pod
+    razlicitim kljucevima ovisno o velicini: city, town, village..."""
+    address = (payload or {}).get("address") or {}
+    name = (
+        address.get("city")
+        or address.get("town")
+        or address.get("village")
+        or address.get("municipality")
+        or address.get("county")
+        or ""
+    )
+    return name, address.get("country") or ""
+
+
 def reverse(latitude, longitude):
-    """Koordinate -> ime mjesta. Koristi se za tocnu lokaciju iz preglednika."""
+    """Koordinate -> ime mjesta. Koristi se za tocnu lokaciju iz preglednika.
+
+    Nominatim (OpenStreetMap) dopusta jedan zahtjev u sekundi; rezultat se
+    pamti dan, pa je to daleko od granice.
+    """
     key = "prognoze:rev:{0:.3f}:{1:.3f}".format(latitude, longitude)
     cached = cache.get(key)
     if cached is not None:
@@ -208,21 +286,19 @@ def reverse(latitude, longitude):
         response = requests.get(
             REVERSE_URL,
             params={
-                "latitude": latitude,
-                "longitude": longitude,
-                "localityLanguage": "hr",
+                "lat": latitude,
+                "lon": longitude,
+                "format": "jsonv2",
+                "accept-language": "hr",
+                # 10 = razina grada; finije bi vracalo ulice i cetvrti.
+                "zoom": 10,
             },
+            headers={"User-Agent": USER_AGENT},
             timeout=HTTP_TIMEOUT,
         )
         response.raise_for_status()
-        payload = response.json()
-        name = (
-            payload.get("city")
-            or payload.get("locality")
-            or payload.get("principalSubdivision")
-            or name
-        )
-        country = payload.get("countryName") or ""
+        found_name, country = parse_nominatim(response.json())
+        name = found_name or name
     except Exception as error:
         # Ime je samo ukras - koordinate su vec tocne, prognoza radi i bez njega.
         logger.warning("Obrnuto geokodiranje nije uspjelo: %s", error)
@@ -255,11 +331,14 @@ def default_location():
         country=DEFAULT_LOCATION.country,
         latitude=DEFAULT_LOCATION.latitude,
         longitude=DEFAULT_LOCATION.longitude,
+        timezone=DEFAULT_LOCATION.timezone,
         source=BY_DEFAULT,
     )
 
 
-def resolve(query=None, latitude=None, longitude=None, ip=None):
+def resolve(
+    query=None, latitude=None, longitude=None, ip=None, name=None, tz=None
+):
     """Odredi mjesto po redoslijedu iz zaglavlja modula."""
     location = None
 
@@ -271,7 +350,22 @@ def resolve(query=None, latitude=None, longitude=None, ip=None):
     if location is None:
         point = _coordinates(latitude, longitude)
         if point is not None:
-            location = reverse(point[0], point[1])
+            if name and name.strip():
+                # Grad odabran iz prijedloga: ime vec znamo, pa nema
+                # potrebe pitati za njega jos jednom. Koordinate su tocno
+                # onog mjesta koje je covjek odabrao, a ne prvog koje bi
+                # trazilica nasla pod tim imenom.
+                location = Location(
+                    name=name.strip()[:80],
+                    country="",
+                    latitude=point[0],
+                    longitude=point[1],
+                    # Prijedlozi salju i zonu, pa se ni ona ne mora traziti.
+                    timezone=(tz or "").strip()[:64],
+                    source=BY_QUERY,
+                )
+            else:
+                location = reverse(point[0], point[1])
 
     if location is None and ip:
         location = from_ip(ip)
@@ -279,7 +373,10 @@ def resolve(query=None, latitude=None, longitude=None, ip=None):
     if location is None:
         location = default_location()
 
-    location.utc_offset_seconds = utc_offset_for(
-        location.latitude, location.longitude
-    )
+    # Pomak zone iz naziva je besplatan; upit preko mreze je zadnja opcija.
+    pomak = offset_from_timezone(location.timezone)
+    if pomak is None:
+        pomak = utc_offset_for(location.latitude, location.longitude)
+    location.utc_offset_seconds = pomak
+
     return location

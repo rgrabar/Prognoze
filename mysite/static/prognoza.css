@@ -40,8 +40,162 @@ body {
     gap: 8px;
 }
 
-.trazilica input {
+/* --- traka ucitavanja --- */
+
+.ucitavanje {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--linija);
+    /* Traka je nosac; visinu joj daje crta unutra. */
+    height: 4px;
+    /* Crta je dvostruko sira od trake pa visak treba odrezati. */
+    overflow: hidden;
+}
+
+.ucitavanje[hidden] {
+    display: none;
+}
+
+/* Ne zna se koliko ce trajati, pa crta putuje umjesto da glumi postotak. */
+/* Boje putuju cijelom sirinom trake. Iste su kao razredi UV indeksa, da
+   traka pripada ostatku stranice umjesto da bude nasumicna duga.
+
+   Pomice se `transform`, a ne `background-position`. Razlika je vazna na
+   mobitelu: pomak pozadine racuna glavna dretva, a ona je usred odlaska
+   na novu stranicu zauzeta, pa animacija stane i traka izgleda mrtvo.
+   `transform` ide preko kompozitora i nastavi se vrtjeti.
+
+   Crta je dvostruko sira od trake i nosi dvije jednake kopije gradijenta
+   (`background-size: 50%`), pa pomak za pola svoje sirine dovede sljedecu
+   kopiju tocno na mjesto prethodne - vrti se u krug bez vidljivog skoka. */
+.ucitavanje-crta {
+    display: block;
+    height: 100%;
+    width: 200%;
+    background-image: linear-gradient(
+        90deg,
+        #1f7fd0,
+        #3ea72d,
+        #d9b800,
+        #f18b00,
+        #e53210,
+        #9b4dca,
+        #1f7fd0
+    );
+    background-size: 50% 100%;
+    background-repeat: repeat-x;
+    animation: teku 1.8s linear infinite;
+    will-change: transform;
+}
+
+/* Sama crta se na mobitelu lako previdi, pa uz nju ide i natpis.
+
+   Natpis stoji pri dnu, a ne uz crtu na vrhu: ondje bi prekrio trazilicu,
+   dakle bas ono polje u koje je covjek upravo tipkao. */
+.ucitavanje-poruka {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: var(--sat-rub-sada);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+@keyframes teku {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+/* Blago pulsiranje - koristi se kad je pomicanje iskljuceno. */
+@keyframes disi {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+@media (max-width: 640px) {
+    .ucitavanje {
+        height: 6px;
+    }
+
+    .ucitavanje-poruka {
+        font-size: 14px;
+        padding: 10px 20px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* Bez klizanja - ali i dalje mora biti vidljivo da se nesto dogada,
+       pa boje umjesto putovanja blago pulsiraju. Mnogi mobiteli imaju
+       "smanji animacije" ukljuceno (i ustedni nacin rada ga zna ukljuciti
+       sam), a bez ovoga bi im traka izgledala mrtvo. */
+    .ucitavanje-crta {
+        width: 100%;
+        background-size: 100% 100%;
+        animation: disi 1.6s ease-in-out infinite;
+    }
+}
+
+/* Popis prijedloga lebdi ispod polja, pa polje treba biti sidro. */
+.polje {
+    position: relative;
     flex: 1;
+    min-width: 0;
+}
+
+.prijedlozi {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: var(--karta);
+    border: 1px solid var(--linija);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.prijedlozi[hidden] {
+    display: none;
+}
+
+.prijedlozi li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.prijedlozi li:hover,
+.prijedlozi li.oznacen {
+    background: var(--sat-plava);
+}
+
+.prijedlog-ime {
+    font-weight: 600;
+}
+
+.prijedlog-gdje {
+    font-size: 12px;
+    color: var(--slabo);
+}
+
+.trazilica input {
+    width: 100%;
     padding: 10px 14px;
     font-size: 16px;
     border: 1px solid var(--linija);
@@ -157,6 +311,29 @@ body {
     gap: 6px;
 }
 
+/* Vjetar/kisa i UV/zrak: uvijek jedno uz drugo. `nowrap` je poanta -
+   ova se dva stupca nikad ne smiju razdvojiti u dva reda. */
+.mjerenja {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 24px;
+}
+
+@media (max-width: 520px) {
+    /* Na mobitelu par zauzme cijeli red ispod temperature i dijeli ga
+       na dvije jednake polovice, pa sirina brojke vise ne odlucuje. */
+    .mjerenja {
+        width: 100%;
+        gap: 16px;
+    }
+
+    .mjerenja .stupac {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+}
+
 /* --- traka po satima --- */
 
 /* Na uskom zaslonu 24 slikice ne stanu citljivo, pa se traka vodoravno
@@ -257,6 +434,50 @@ body {
     font-size: 10px;
     color: var(--slabo);
     font-variant-numeric: tabular-nums;
+}
+
+/* --- sutra po satima (sklopljeno) --- */
+
+.sutra {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--linija);
+}
+
+.sutra summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+/* Vlastita strelica, jer se ona ugradena ne da urediti jednako svugdje. */
+.sutra summary::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid var(--slabo);
+    border-bottom: 2px solid var(--slabo);
+    transform: rotate(-45deg);
+    transition: transform 0.15s;
+    flex: 0 0 auto;
+    margin-right: 2px;
+}
+
+.sutra[open] summary::before {
+    transform: rotate(45deg);
+}
+
+.sutra summary::-webkit-details-marker {
+    display: none;
+}
+
+.sutra summary .sitno {
+    color: var(--slabo);
+    font-size: 13px;
 }
 
 /* --- opis odabranog sata --- */

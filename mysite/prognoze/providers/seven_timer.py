@@ -78,8 +78,10 @@ class SevenTimerProvider(Provider):
                     time=start + timedelta(hours=offset),
                     temp_c=to_float(entry.get("temp2m")),
                     condition=from_7timer(entry.get("weather")),
-                    # 7Timer ne daje vjerojatnost oborine, samo razred kolicine.
+                    # 7Timer ne daje ni vjerojatnost ni mm - `prec_amount`
+                    # je razred 0-9, pa bi u prosjek usao kao krivi broj.
                     precip_prob=None,
+                    precip_mm=None,
                     wind_kph=seven_timer_wind_kph(wind.get("speed")),
                     wind_dir_deg=compass_to_degrees(wind.get("direction")),
                     humidity=parse_humidity(entry.get("rh2m")),

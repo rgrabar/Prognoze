@@ -67,6 +67,7 @@ class MetNoProvider(Provider):
                     precip_prob=to_float(
                         details.get("probability_of_precipitation")
                     ),
+                    precip_mm=to_float(details.get("precipitation_amount")),
                     # met.no daje m/s, mi svugdje racunamo u km/h.
                     wind_kph=ms_to_kph(instant.get("wind_speed")),
                     humidity=to_float(instant.get("relative_humidity")),
@@ -87,6 +88,7 @@ class MetNoProvider(Provider):
             forecast.precip_prob = to_float(
                 details.get("probability_of_precipitation")
             )
+            forecast.precip_mm = to_float(details.get("precipitation_amount"))
 
         return forecast
 

@@ -56,6 +56,7 @@ class WeatherApiProvider(Provider):
                 (current.get("condition") or {}).get("code")
             )
             forecast.uv = to_float(current.get("uv"))
+            forecast.precip_mm = to_float(current.get("precip_mm"))
 
         # WeatherAPI vraca lokalno vrijeme mjesta, bez oznake zone.
         local_zone = timezone(timedelta(seconds=location.utc_offset_seconds))
@@ -82,6 +83,7 @@ class WeatherApiProvider(Provider):
                             (slot.get("condition") or {}).get("code")
                         ),
                         precip_prob=to_float(slot.get("chance_of_rain")),
+                        precip_mm=to_float(slot.get("precip_mm")),
                         wind_kph=to_float(slot.get("wind_kph")),
                         humidity=to_float(slot.get("humidity")),
                         uv=to_float(slot.get("uv")),

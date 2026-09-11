@@ -1,2 +1,6 @@
 Django>=4.2,<5.0
 requests>=2.31
+
+# Django na Windowsu ga ionako povlaci; ovdje je izricito jer
+# geocode.offset_from_timezone racuna pomak zone preko zoneinfo.
+tzdata; sys_platform == "win32"

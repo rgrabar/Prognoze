@@ -33,7 +33,8 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
 HOURLY_FIELDS = (
     "weather_code,temperature_2m,relative_humidity_2m,"
-    "wind_speed_10m,wind_direction_10m,precipitation_probability,uv_index"
+    "wind_speed_10m,wind_direction_10m,precipitation_probability,"
+    "precipitation,uv_index"
 )
 DAILY_FIELDS = "sunrise,sunset"
 
@@ -143,6 +144,9 @@ class OpenMeteoProvider(Provider):
         directions = series("wind_direction_10m")
         humidities = series("relative_humidity_2m")
         probs = series("precipitation_probability") if model.precip_prob else []
+        # Kolicina (mm) je pouzdana i kod GEM-a - on je za vedar dan javljao
+        # 71% *vjerojatnosti*, ali 0.0 mm. Zato mm uzimamo od svih.
+        amounts = series("precipitation")
         uvs = series("uv_index") if model.key == UV_MODEL else []
 
         def at(values, index):
@@ -159,6 +163,7 @@ class OpenMeteoProvider(Provider):
                     temp_c=to_float(at(temps, index)),
                     condition=from_wmo(at(codes, index)),
                     precip_prob=to_float(at(probs, index)),
+                    precip_mm=to_float(at(amounts, index)),
                     wind_kph=to_float(at(winds, index)),
                     wind_dir_deg=to_float(at(directions, index)),
                     humidity=to_float(at(humidities, index)),
@@ -176,6 +181,7 @@ class OpenMeteoProvider(Provider):
             forecast.wind_dir_deg = current.wind_dir_deg
             forecast.humidity = current.humidity
             forecast.precip_prob = current.precip_prob
+            forecast.precip_mm = current.precip_mm
             forecast.uv = current.uv
 
         if model.key == UV_MODEL:

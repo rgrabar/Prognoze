@@ -13,6 +13,15 @@ from .base import HourPoint, Provider, ProviderForecast, to_float
 
 BASE_URL = "https://wttr.in/{lat},{lon}"
 
+# wttr.in daje podatke u koracima od 3 sata.
+STEP_HOURS = 3
+
+
+def _per_hour(value):
+    """Kolicina za trosatni korak -> prosjek po satu."""
+    number = to_float(value)
+    return None if number is None else number / STEP_HOURS
+
 
 class WttrProvider(Provider):
     name = "wttr"
@@ -38,6 +47,8 @@ class WttrProvider(Provider):
             forecast.humidity = to_float(current.get("humidity"))
             forecast.condition = from_wwo(current.get("weatherCode"))
             forecast.uv = to_float(current.get("uvIndex"))
+            # U "current" je precipMM za tekuci sat, ne za tri.
+            forecast.precip_mm = to_float(current.get("precipMM"))
 
         local_zone = timezone(timedelta(seconds=location.utc_offset_seconds))
 
@@ -64,6 +75,9 @@ class WttrProvider(Provider):
                         temp_c=to_float(slot.get("tempC")),
                         condition=from_wwo(slot.get("weatherCode")),
                         precip_prob=to_float(slot.get("chanceofrain")),
+                        # Korak je 3 sata, pa je ovo kolicina za 3 sata,
+                        # ne za jedan - podijeli da bude usporedivo.
+                        precip_mm=_per_hour(slot.get("precipMM")),
                         wind_kph=to_float(slot.get("windspeedKmph")),
                         humidity=to_float(slot.get("humidity")),
                         uv=to_float(slot.get("uvIndex")),

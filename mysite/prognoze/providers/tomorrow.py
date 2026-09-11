@@ -36,6 +36,22 @@ from .base import (
 FORECAST_URL = "https://api.tomorrow.io/v4/weather/forecast"
 
 
+def total_precip_mm(values):
+    """Ukupna oborina u satu, kao tekuci ekvivalent.
+
+    Tomorrow.io kisu, snijeg i susnjezicu daje odvojeno. Snijeg i
+    susnjezica imaju i "Lwe" inacicu (liquid water equivalent) - koliko bi
+    vode nastalo kad se otope - i bas ona je usporediva s kisom u mm.
+    """
+    parts = [
+        to_float(values.get("rainAccumulation")),
+        to_float(values.get("snowAccumulationLwe")),
+        to_float(values.get("sleetAccumulationLwe")),
+    ]
+    present = [p for p in parts if p is not None]
+    return sum(present) if present else None
+
+
 class TomorrowProvider(Provider):
     name = "tomorrow"
     label = "Tomorrow.io"
@@ -82,6 +98,7 @@ class TomorrowProvider(Provider):
                     precip_prob=to_float(
                         values.get("precipitationProbability")
                     ),
+                    precip_mm=total_precip_mm(values),
                     # metric znaci m/s, a mi svugdje racunamo u km/h.
                     wind_kph=ms_to_kph(values.get("windSpeed")),
                     wind_dir_deg=to_float(values.get("windDirection")),
@@ -95,6 +112,7 @@ class TomorrowProvider(Provider):
             forecast.temp_c = current.temp_c
             forecast.condition = current.condition
             forecast.precip_prob = current.precip_prob
+            forecast.precip_mm = current.precip_mm
             forecast.wind_kph = current.wind_kph
             forecast.wind_dir_deg = current.wind_dir_deg
             forecast.humidity = current.humidity

@@ -4,11 +4,26 @@ Pogled je namjerno tanak: odredi mjesto, pokupi izvore, usrednji, renderaj.
 Sva logika je u `geocode`, `providers`, `aggregate` i `air`.
 """
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 
+from django.conf import settings
 from django.shortcuts import render
 
 from . import aggregate, air, geocode, providers
+
+
+def css_version():
+    """Vrijeme zadnje izmjene stilova, kao broj.
+
+    Ide u URL stilova (`prognoza.css?v=...`), pa preglednik nakon svake
+    izmjene povuce novu datoteku umjesto da sluzi staru iz svog cachea.
+    Bez toga se izmjena izgleda na mobitelu zna ne vidjeti danima.
+    """
+    try:
+        return int(os.path.getmtime(settings.STATICFILES_DIRS[0] / "prognoza.css"))
+    except (OSError, IndexError):
+        return 0
 
 
 def client_ip(request):
@@ -32,6 +47,9 @@ def op(request):
         query=query,
         latitude=request.GET.get("lat"),
         longitude=request.GET.get("lon"),
+        # Ime i zona stizu samo kad je grad odabran iz prijedloga.
+        name=request.GET.get("name"),
+        tz=request.GET.get("tz"),
         ip=client_ip(request),
     )
 
@@ -51,6 +69,7 @@ def op(request):
             "query": query,
             "prognoza": data,
             "zrak": quality,
+            "css_v": css_version(),
             # Granice raspona za suncanje - da tekst i kod ne razilaze.
             "tan_min": aggregate.TAN_MIN_UV,
             "tan_max": aggregate.TAN_MAX_UV,

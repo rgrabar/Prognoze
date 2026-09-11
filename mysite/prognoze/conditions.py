@@ -38,7 +38,7 @@ CONDITION_ICONS = {
     Condition.PARTLY_CLOUDY: "cloud_sun.png",
     Condition.OVERCAST: "cloud.png",
     Condition.FOG: "magla.png",
-    Condition.DRIZZLE: "rain.png",
+    Condition.DRIZZLE: "drizzle.png",
     Condition.RAIN: "rain.png",
     Condition.SLEET: "rain_snow.png",
     Condition.SNOW: "pahulja.png",

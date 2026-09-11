@@ -29,6 +29,9 @@ class HourPoint:
     temp_c: Optional[float] = None
     condition: Optional[Condition] = None
     precip_prob: Optional[float] = None
+    # Kolicina oborine u tom satu, u mm (tekuci ekvivalent - snijeg se
+    # racuna kao voda koja bi od njega nastala).
+    precip_mm: Optional[float] = None
     wind_kph: Optional[float] = None
     wind_dir_deg: Optional[float] = None
     humidity: Optional[float] = None
@@ -47,6 +50,7 @@ class ProviderForecast:
     humidity: Optional[float] = None
     condition: Optional[Condition] = None
     precip_prob: Optional[float] = None
+    precip_mm: Optional[float] = None
     uv: Optional[float] = None
     hours: List[HourPoint] = field(default_factory=list)
     # Parovi (izlazak, zalazak) u UTC-u - za odabir sunca ili mjeseca.
@@ -174,6 +178,7 @@ def interpolate(hours, now):
         temp_c=blend(start.temp_c, end.temp_c),
         condition=blizi.condition,
         precip_prob=blend(start.precip_prob, end.precip_prob),
+        precip_mm=blend(start.precip_mm, end.precip_mm),
         wind_kph=blend(start.wind_kph, end.wind_kph),
         wind_dir_deg=blizi.wind_dir_deg,
         humidity=blend(start.humidity, end.humidity),

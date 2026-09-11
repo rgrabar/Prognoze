@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from django.conf import settings
+from django.core.cache import cache
 from django.test import RequestFactory, SimpleTestCase
 
 from . import aggregate, air, providers, views
@@ -30,8 +31,9 @@ from .conditions import (
     seven_timer_wind_kph,
     wind_direction,
 )
+from . import geocode
 from .geocode import Location, is_public_ip, _coordinates
-from .providers import open_meteo, tomorrow, weather_api
+from .providers import open_meteo, tomorrow, weather_api, wttr
 from .providers.base import (
     HourPoint,
     ProviderForecast,
@@ -74,6 +76,14 @@ class ConditionMappingTests(SimpleTestCase):
         self.assertEqual(icon_for(Condition.RAIN), "rain.png")
         self.assertEqual(icon_for(Condition.SNOW), "pahulja.png")
         self.assertEqual(icon_for(None), "neznamovrime.png")
+
+    def test_rosulja_i_kisa_imaju_razlicite_slikice(self):
+        # Dva razlicita glasa - od kad postoji drizzle.png vise ne dijele
+        # istu sliku.
+        self.assertEqual(icon_for(Condition.DRIZZLE), "drizzle.png")
+        self.assertNotEqual(
+            icon_for(Condition.DRIZZLE), icon_for(Condition.RAIN)
+        )
 
     def test_stanja_sa_suncem_imaju_nocnu_inacicu(self):
         self.assertEqual(icon_for(Condition.CLEAR), "sun.png")
@@ -235,6 +245,16 @@ class SevenTimerTests(SimpleTestCase):
         self.assertIsNone(compass_to_degrees(None))
 
 
+class CssVersionTests(SimpleTestCase):
+    def test_verzija_je_vrijeme_izmjene_datoteke(self):
+        # Broj koji se mijenja s datotekom - da preglednik ne sluzi stari CSS.
+        self.assertGreater(views.css_version(), 0)
+
+    def test_bez_datoteke_ne_puca(self):
+        with mock.patch("os.path.getmtime", side_effect=OSError):
+            self.assertEqual(views.css_version(), 0)
+
+
 class ClientIpTests(SimpleTestCase):
     def test_uzima_prvi_iz_x_forwarded_for(self):
         request = RequestFactory().get(
@@ -273,6 +293,171 @@ class PublicIpTests(SimpleTestCase):
         self.assertFalse(is_public_ip(None))
         self.assertFalse(is_public_ip("nije-ip"))
         self.assertFalse(is_public_ip("999.999.999.999"))
+
+
+class ChosenCityTests(SimpleTestCase):
+    """Grad odabran iz prijedloga stize kao koordinate + ime."""
+
+    def test_ime_iz_prijedloga_se_koristi_bez_novog_upita(self):
+        with mock.patch.object(geocode, "reverse") as obrnuto, \
+                mock.patch.object(geocode, "utc_offset_for", return_value=0):
+            location = geocode.resolve(
+                latitude="43.5081", longitude="16.4402", name="Split"
+            )
+
+        self.assertEqual(location.name, "Split")
+        self.assertEqual(location.latitude, 43.5081)
+        self.assertEqual(location.source, geocode.BY_QUERY)
+        # Ime vec znamo, pa se obrnuto geokodiranje preskace.
+        obrnuto.assert_not_called()
+
+    def test_bez_imena_se_i_dalje_pita_za_njega(self):
+        with mock.patch.object(geocode, "reverse") as obrnuto, \
+                mock.patch.object(geocode, "utc_offset_for", return_value=0):
+            obrnuto.return_value = Location(
+                "Negdje", "HR", 43.5081, 16.4402, source=geocode.BY_PRECISE
+            )
+            geocode.resolve(latitude="43.5081", longitude="16.4402")
+
+        obrnuto.assert_called_once()
+
+    def test_predugo_ime_se_krati(self):
+        with mock.patch.object(geocode, "utc_offset_for", return_value=0):
+            location = geocode.resolve(
+                latitude="45.32", longitude="14.47", name="x" * 500
+            )
+        self.assertEqual(len(location.name), 80)
+
+
+class TimezoneOffsetTests(SimpleTestCase):
+    """Pomak zone iz naziva - brzi put, bez mreznog upita."""
+
+    def test_naziv_zone_daje_pomak(self):
+        # Hrvatska je zimi +1, ljeti +2; oba su valjana.
+        self.assertIn(
+            geocode.offset_from_timezone("Europe/Zagreb"), (3600, 7200)
+        )
+        self.assertEqual(geocode.offset_from_timezone("UTC"), 0)
+
+    def test_nepoznata_ili_prazna_zona_daje_none(self):
+        self.assertIsNone(geocode.offset_from_timezone(""))
+        self.assertIsNone(geocode.offset_from_timezone(None))
+        self.assertIsNone(geocode.offset_from_timezone("Nije/Zona"))
+
+    def test_poznata_zona_preskace_mrezni_upit(self):
+        with mock.patch.object(geocode, "utc_offset_for") as preko_mreze:
+            location = geocode.resolve(
+                latitude="43.5081",
+                longitude="16.4402",
+                name="Split",
+                tz="Europe/Zagreb",
+            )
+
+        self.assertIn(location.utc_offset_seconds, (3600, 7200))
+        preko_mreze.assert_not_called()
+
+    def test_bez_zone_se_pita_preko_mreze(self):
+        # Obrnuto geokodiranje ne vraca zonu, pa pomak mora doci s mreze.
+        with mock.patch.object(
+            geocode, "utc_offset_for", return_value=7200
+        ) as preko_mreze, mock.patch.object(
+            geocode, "reverse",
+            return_value=Location("Negdje", "", 43.5, 16.4),
+        ):
+            geocode.resolve(latitude="43.5", longitude="16.4")
+
+        preko_mreze.assert_called_once()
+
+    def test_zadano_mjesto_ima_zonu(self):
+        # Rijeka je zadana, pa ni ona ne treba mrezni upit.
+        with mock.patch.object(geocode, "utc_offset_for") as preko_mreze:
+            location = geocode.resolve()
+
+        self.assertEqual(location.name, "Rijeka")
+        self.assertIn(location.utc_offset_seconds, (3600, 7200))
+        preko_mreze.assert_not_called()
+
+
+class IpinfoParseTests(SimpleTestCase):
+    """ipinfo.io - koordinate stizu kao jedan tekst, drzava kao oznaka."""
+
+    def test_razdvaja_koordinate_iz_teksta(self):
+        location = geocode.parse_ipinfo({
+            "city": "Karlovac", "region": "Karlovac", "country": "HR",
+            "loc": "45.4917,15.5500", "timezone": "Europe/Zagreb",
+        })
+        self.assertEqual(location.name, "Karlovac")
+        self.assertEqual(location.latitude, 45.4917)
+        self.assertEqual(location.longitude, 15.55)
+        self.assertEqual(location.timezone, "Europe/Zagreb")
+        self.assertEqual(location.source, geocode.BY_IP)
+
+    def test_bez_koordinata_ili_smece_daje_none(self):
+        self.assertIsNone(geocode.parse_ipinfo({"city": "X"}))
+        self.assertIsNone(geocode.parse_ipinfo({"loc": "nije,broj"}))
+        self.assertIsNone(geocode.parse_ipinfo({"loc": "45.0"}))
+        self.assertIsNone(geocode.parse_ipinfo(None))
+        # "bogon" znaci privatnu/rezerviranu adresu.
+        self.assertIsNone(geocode.parse_ipinfo({"bogon": True}))
+
+    def test_neuspjeh_se_pamti_da_se_ne_ponavlja(self):
+        # Blokirana ili pala usluga ne smije se zvati na svaki zahtjev.
+        cache.clear()
+        with mock.patch.object(
+            geocode.requests, "get", side_effect=OSError("blokirano")
+        ) as poziv:
+            self.assertIsNone(geocode.from_ip("8.8.8.8"))
+            self.assertIsNone(geocode.from_ip("8.8.8.8"))
+        self.assertEqual(poziv.call_count, 1)
+        cache.clear()
+
+
+class NominatimParseTests(SimpleTestCase):
+    """Nominatim naselje javlja pod razlicitim kljucevima."""
+
+    def test_grad(self):
+        ime, drzava = geocode.parse_nominatim(
+            {"address": {"city": "Split", "country": "Hrvatska"}}
+        )
+        self.assertEqual((ime, drzava), ("Split", "Hrvatska"))
+
+    def test_manje_mjesto_pod_town_ili_village(self):
+        self.assertEqual(
+            geocode.parse_nominatim({"address": {"town": "Krk"}})[0], "Krk"
+        )
+        self.assertEqual(
+            geocode.parse_nominatim({"address": {"village": "Lubenice"}})[0],
+            "Lubenice",
+        )
+
+    def test_grad_ima_prednost_pred_manjim(self):
+        ime, _ = geocode.parse_nominatim(
+            {"address": {"village": "X", "city": "Rijeka"}}
+        )
+        self.assertEqual(ime, "Rijeka")
+
+    def test_prazno_daje_prazno(self):
+        self.assertEqual(geocode.parse_nominatim({}), ("", ""))
+        self.assertEqual(geocode.parse_nominatim(None), ("", ""))
+
+
+class DisabledSourcesTests(SimpleTestCase):
+    def test_iskljuceni_izvori_se_ne_pojavljuju(self):
+        with mock.patch.dict(
+            os.environ, {"PROGNOZE_DISABLED_SOURCES": "wttr, seven_timer"}
+        ):
+            imena = {p.name for p in providers.all_providers()}
+        self.assertNotIn("wttr", imena)
+        self.assertNotIn("seven_timer", imena)
+        # Ostali ostaju.
+        self.assertIn("met_no", imena)
+        self.assertIn("open_meteo_group", imena)
+
+    def test_bez_varijable_su_svi_tu(self):
+        with mock.patch.dict(os.environ, {"PROGNOZE_DISABLED_SOURCES": ""}):
+            imena = {p.name for p in providers.all_providers()}
+        self.assertIn("wttr", imena)
+        self.assertIn("seven_timer", imena)
 
 
 class CoordinateTests(SimpleTestCase):
@@ -389,6 +574,49 @@ class OpenMeteoGroupTests(SimpleTestCase):
         self.assertNotIn("icon_seamless", kljucevi)
         self.assertNotIn("metno_seamless", kljucevi)
         self.assertNotIn("ecmwf_ifs04", kljucevi)
+
+
+class PrecipitationAmountTests(SimpleTestCase):
+    """Milimetri oborine - svaki izvor ih daje malo drugacije."""
+
+    def test_wttr_trosatnu_kolicinu_dijeli_na_sat(self):
+        # 3.0 mm u tri sata je 1.0 mm po satu, inace bi wttr u prosjeku
+        # trostruko nadglasao satne izvore.
+        self.assertEqual(wttr._per_hour("3.0"), 1.0)
+        self.assertEqual(wttr._per_hour(0), 0.0)
+        self.assertIsNone(wttr._per_hour(None))
+        self.assertIsNone(wttr._per_hour("puno"))
+
+    def test_tomorrow_zbraja_kisu_snijeg_i_susnjezicu(self):
+        # Snijeg i susnjezica ulaze kao tekuci ekvivalent (Lwe), ne kao
+        # visina snijega - samo je to usporedivo s kisom.
+        vrijednosti = {
+            "rainAccumulation": 1.0,
+            "snowAccumulationLwe": 0.5,
+            "sleetAccumulationLwe": 0.25,
+            "snowAccumulation": 99.0,
+        }
+        self.assertEqual(tomorrow.total_precip_mm(vrijednosti), 1.75)
+
+    def test_tomorrow_bez_podataka_daje_none(self):
+        self.assertIsNone(tomorrow.total_precip_mm({}))
+        self.assertEqual(tomorrow.total_precip_mm({"rainAccumulation": 0}), 0.0)
+
+    def test_sat_pokazuje_mm_samo_kad_ih_ima(self):
+        suh = aggregate.AggregatedHour(hour=10, label="", precip_mm=0.0)
+        self.assertNotIn("mm", suh.title)
+
+        mokar = aggregate.AggregatedHour(hour=10, label="", precip_mm=1.2)
+        self.assertIn("1.2 mm", mokar.title)
+
+    def test_dan_zbraja_satne_milimetre(self):
+        dan = aggregate.DayForecast(
+            label="sutra", precip_hours=3, precip_mm=4.5
+        )
+        self.assertIn("oborina 3 h, 4.5 mm", dan.title)
+
+        suh = aggregate.DayForecast(label="sutra", precip_hours=0)
+        self.assertNotIn("oborina", suh.title)
 
 
 class TomorrowTests(SimpleTestCase):
@@ -1024,6 +1252,36 @@ class AggregateBuildTests(SimpleTestCase):
         self.assertEqual(len(result.day_hours), 24)
         self.assertEqual(result.min_c, 20.0)
         self.assertEqual(result.max_c, 22.3)
+
+    def test_sutra_ima_svih_24_sata(self):
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        # Prosiri niz da pokrije i sutra (2026-09-03 lokalno).
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            forecast.hours.append(
+                HourPoint(
+                    time=zadnji + timedelta(hours=i),
+                    temp_c=15.0,
+                    condition=Condition.RAIN,
+                )
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        sutra = result.tomorrow_hours
+        self.assertEqual(len(sutra), 24)
+        self.assertEqual([h.hour for h in sutra], list(range(24)))
+        # Sutra nijedan sat nije "sada" ni "proslo".
+        self.assertFalse(any(h.is_now for h in sutra))
+        self.assertFalse(any(h.is_past for h in sutra))
+        self.assertTrue(all(h.condition == Condition.RAIN for h in sutra))
+
+    def test_sutra_bez_podataka_je_prazno(self):
+        # Izvor pokriva samo danas.
+        forecasts = [self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)]
+        result = aggregate.build(self.location, forecasts, now_utc=self.now)
+
+        self.assertEqual(result.tomorrow_hours, [])
+        self.assertEqual(aggregate.build(self.location, [], now_utc=self.now).tomorrow_hours, [])
 
     def test_dan_bez_podataka_ostaje_prazan(self):
         # Izvor pokriva samo danas, pa preostali dani nemaju sto pokazati.

@@ -7,6 +7,7 @@ istekne kljuc, prosjek se izracuna iz preostalih umjesto da stranica pukne.
 """
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 from django.core.cache import cache
@@ -19,6 +20,18 @@ logger = logging.getLogger(__name__)
 CACHE_SECONDS = 600
 
 
+def disabled_sources():
+    """Imena izvora iskljucenih varijablom PROGNOZE_DISABLED_SOURCES.
+
+    Popis odvojen zarezom, npr. "wttr,seven_timer". Sluzi za hosting koji
+    ne pusta prema svim domenama - besplatni PythonAnywhere ne dopusta
+    wttr.in ni 7timer.info. Iskljucen izvor se ne zove i ne pojavljuje se
+    u popisu kao "nedostupan"; jednostavno ga nema.
+    """
+    raw = os.environ.get("PROGNOZE_DISABLED_SOURCES", "")
+    return {name.strip() for name in raw.split(",") if name.strip()}
+
+
 def all_providers():
     providers = []
     providers.extend(open_meteo.build())
@@ -27,7 +40,9 @@ def all_providers():
     providers.extend(seven_timer.build())
     providers.extend(tomorrow.build())
     providers.extend(weather_api.build())
-    return providers
+
+    disabled = disabled_sources()
+    return [p for p in providers if p.name not in disabled]
 
 
 def _cache_key(provider, location):

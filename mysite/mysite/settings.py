@@ -141,6 +141,11 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
+# Kamo `collectstatic` skuplja sve staticne datoteke za posluzivanje izvan
+# razvoja. Uz DEBUG=0 Django ih sam ne posluzuje - na PythonAnywhereu se u
+# kartici Web namjesti mapiranje URL-a /static/ na ovu mapu.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 

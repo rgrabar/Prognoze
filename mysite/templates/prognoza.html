@@ -1,17 +1,33 @@
 {% load static %}<!DOCTYPE html>
+{% comment %}
+    Traka na vrhu koja se puni dok se stranica ucitava. Novi grad znaci
+    upit prema desetak vanjskih usluga, sto zna potrajati sekundu-dvije, a
+    dotle se na ekranu ne dogada nista.
+{% endcomment %}
 <html lang="hr">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Prognoze - {{ prognoza.location.title }}</title>
-    <link rel="stylesheet" href="{% static 'prognoza.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'umbrella.png' %}">
+    <link rel="stylesheet" href="{% static 'prognoza.css' %}?v={{ css_v }}">
 </head>
 <body>
+<div class="ucitavanje" id="ucitavanje" hidden>
+    <span class="ucitavanje-crta"></span>
+    <span class="ucitavanje-poruka">Ucitavam prognozu...</span>
+</div>
+
 <div class="omot">
 
-    <form class="trazilica" method="get" action=".">
-        <input type="text" name="q" value="{{ query }}"
-               placeholder="Rijeka, Zagreb, Split..." aria-label="Mjesto">
+    <form class="trazilica" method="get" action="." id="trazilica">
+        <div class="polje">
+            <input type="text" name="q" value="{{ query }}" id="mjesto"
+                   placeholder="Rijeka, Zagreb, Split..." aria-label="Mjesto"
+                   autocomplete="off" role="combobox" aria-expanded="false"
+                   aria-controls="prijedlozi" aria-autocomplete="list">
+            <ul class="prijedlozi" id="prijedlozi" role="listbox" hidden></ul>
+        </div>
         <button type="submit">Trazi</button>
     </form>
 
@@ -55,6 +71,13 @@
                 {% endif %}
             </div>
 
+            {% comment %}
+                Vjetar/kisa i UV/zrak su u zajednickom omotu koji se ne
+                lomi. Bez njega je prelamanje ovisilo o sirini brojke:
+                "5.6" je stalo uz UV, a "10.7" vise nije, pa bi UV i zrak
+                skocili u novi red.
+            {% endcomment %}
+            <div class="mjerenja">
             <div class="stupac">
                 <div class="podatak">
                     <div class="veliko">{{ prognoza.wind_kph|default_if_none:"?" }}</div>
@@ -99,31 +122,31 @@
                     {% endif %}
                 </div>
             {% endif %}
+            </div>
         </div>
     </div>
 
     <div class="karta">
         <div class="oznaka">Po satima &middot; 8 unatrag, 16 unaprijed</div>
 
-        <div class="traka-omot">
-            <div class="traka" id="traka-sati">
-                {% for sat in prognoza.hours %}
-                    <div class="sat{% if not sat.sources %} prazno{% endif %}{% if sat.is_now %} trenutni{% endif %}{% if sat.is_past %} proslo{% endif %}{% if sat.starts_day %} novi-dan{% endif %}"
-                         title="{{ sat.title }}">
-                        <div class="kvadrat">
-                            {% if sat.sources %}
-                                <img src="{% static sat.icon %}"
-                                     alt="{{ sat.condition_label }}" loading="lazy">
-                            {% endif %}
-                        </div>
-                        <div class="cas">{{ sat.hour }}</div>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
+        {% include "_traka.html" with sati=prognoza.hours id="traka-sati" %}
 
-        {# Na mobitelu nema prelaska misem, pa se opis ispisuje ovdje. #}
-        <div class="detalj" data-detalj-za="traka-sati" aria-live="polite"></div>
+        {% if prognoza.tomorrow_hours %}
+            {% comment %}
+                Sutrasnji dan po satima, sklopljen dok ga se ne otvori -
+                da ne udvostruci visinu stranice onima koje zanima samo
+                danas. <details> to daje bez JavaScripta.
+            {% endcomment %}
+            <details class="sutra">
+                <summary>
+                    <span class="oznaka">Sutra po satima</span>
+                    <span class="sitno">{{ prognoza.days.0.condition_label }}
+                        &middot; {{ prognoza.days.0.min_c|default_if_none:"?" }}
+                        do {{ prognoza.days.0.max_c|default_if_none:"?" }}&deg;C</span>
+                </summary>
+                {% include "_traka.html" with sati=prognoza.tomorrow_hours id="traka-sutra" %}
+            </details>
+        {% endif %}
     </div>
 
     {% if prognoza.has_uv %}
@@ -272,6 +295,212 @@
 </div>
 
 <script>
+// Traka koja pokazuje da se nesto dogada.
+//
+// Novi grad znaci upit prema desetak vanjskih usluga; kad su odgovori u
+// cacheu to je gotovo odmah, ali prvi put zna potrajati. Traka se pokrece
+// na svaku radnju koja vodi na novo ucitavanje.
+function pokreniUcitavanje() {
+    var traka = document.getElementById("ucitavanje");
+    if (traka) {
+        traka.hidden = false;
+    }
+}
+
+(function () {
+    var forma = document.getElementById("trazilica");
+    if (forma) {
+        forma.addEventListener("submit", pokreniUcitavanje);
+    }
+
+    // Povratak "natrag" u pregledniku moze prikazati stranicu iz memorije,
+    // s trakom koja je ostala upaljena od prosli put.
+    window.addEventListener("pageshow", function () {
+        var traka = document.getElementById("ucitavanje");
+        if (traka) {
+            traka.hidden = true;
+        }
+    });
+})();
+</script>
+
+<script>
+// Prijedlozi gradova dok se tipka.
+//
+// Zove se isti Open-Meteo geocoding koji koristi i posluzitelj, samo
+// izravno iz preglednika - tako ne trosi kvotu posluzitelja i odgovara
+// odmah. Njihova trazilica vraca i smece (zracne luke, prazna mjesta bez
+// stanovnika), pa se rezultati prosijavaju i preslaguju.
+(function () {
+    var polje = document.getElementById("mjesto");
+    var popis = document.getElementById("prijedlozi");
+    var forma = document.getElementById("trazilica");
+    if (!polje || !popis || !forma) {
+        return;
+    }
+
+    var MJESTA = 6;
+    var zadnjiUpit = 0;
+    var odabrano = -1;
+    var trenutni = [];
+    var cekaj = null;
+
+    function rangiraj(rezultati, upit) {
+        var q = upit.toLowerCase();
+        return rezultati
+            .filter(function (r) {
+                // PPL* su naseljena mjesta; ostalo su zracne luke i slicno.
+                // Mjesta bez stanovnika su gotovo uvijek smece iz baze.
+                return (r.feature_code || "").indexOf("PPL") === 0 &&
+                       (r.population || 0) > 0;
+            })
+            .sort(function (a, b) {
+                var ap = a.name.toLowerCase().indexOf(q) === 0 ? 1 : 0;
+                var bp = b.name.toLowerCase().indexOf(q) === 0 ? 1 : 0;
+                if (ap !== bp) {
+                    return bp - ap;
+                }
+                return (b.population || 0) - (a.population || 0);
+            })
+            .slice(0, MJESTA);
+    }
+
+    function opis(mjesto) {
+        return [mjesto.admin1, mjesto.country]
+            .filter(Boolean)
+            .join(", ");
+    }
+
+    function zatvori() {
+        popis.hidden = true;
+        popis.innerHTML = "";
+        polje.setAttribute("aria-expanded", "false");
+        odabrano = -1;
+        trenutni = [];
+    }
+
+    function otvori(mjesta) {
+        trenutni = mjesta;
+        odabrano = -1;
+        popis.innerHTML = "";
+
+        mjesta.forEach(function (mjesto, i) {
+            var stavka = document.createElement("li");
+            stavka.setAttribute("role", "option");
+            stavka.dataset.redni = i;
+
+            var ime = document.createElement("span");
+            ime.className = "prijedlog-ime";
+            ime.textContent = mjesto.name;
+
+            var gdje = document.createElement("span");
+            gdje.className = "prijedlog-gdje";
+            gdje.textContent = opis(mjesto);
+
+            stavka.appendChild(ime);
+            stavka.appendChild(gdje);
+            stavka.addEventListener("mousedown", function (dogadaj) {
+                // mousedown, ne click: inace polje izgubi fokus i popis se
+                // zatvori prije nego klik stigne.
+                dogadaj.preventDefault();
+                izaberi(i);
+            });
+            popis.appendChild(stavka);
+        });
+
+        popis.hidden = mjesta.length === 0;
+        polje.setAttribute("aria-expanded", String(mjesta.length > 0));
+    }
+
+    function oznaci(novi) {
+        var stavke = popis.querySelectorAll("li");
+        if (!stavke.length) {
+            return;
+        }
+        odabrano = (novi + stavke.length) % stavke.length;
+        Array.prototype.forEach.call(stavke, function (stavka, i) {
+            stavka.classList.toggle("oznacen", i === odabrano);
+        });
+    }
+
+    function izaberi(i) {
+        var mjesto = trenutni[i];
+        if (!mjesto) {
+            return;
+        }
+        // Salju se koordinate, pa se dobije bas ono mjesto koje je covjek
+        // odabrao - a ne ono koje bi trazilica prva nasla za to ime.
+        var url = new URL(window.location.href);
+        url.search = "";
+        url.searchParams.set("lat", mjesto.latitude.toFixed(4));
+        url.searchParams.set("lon", mjesto.longitude.toFixed(4));
+        url.searchParams.set("name", mjesto.name);
+        if (mjesto.timezone) {
+            // Zonu vec znamo iz prijedloga - posluzitelj je onda ne mora
+            // nigdje traziti.
+            url.searchParams.set("tz", mjesto.timezone);
+        }
+        pokreniUcitavanje();
+        window.location.assign(url.toString());
+    }
+
+    function trazi(upit) {
+        var broj = ++zadnjiUpit;
+        var adresa = "https://geocoding-api.open-meteo.com/v1/search" +
+            "?name=" + encodeURIComponent(upit) +
+            "&count=20&language=hr&format=json";
+
+        fetch(adresa).then(function (odgovor) {
+            return odgovor.json();
+        }).then(function (podaci) {
+            // Spori stariji odgovor ne smije pregaziti noviji.
+            if (broj !== zadnjiUpit) {
+                return;
+            }
+            otvori(rangiraj(podaci.results || [], upit));
+        }).catch(function () {
+            zatvori();
+        });
+    }
+
+    polje.addEventListener("input", function () {
+        var upit = polje.value.trim();
+        clearTimeout(cekaj);
+        if (upit.length < 2) {
+            zatvori();
+            return;
+        }
+        // Ne šalji zahtjev na svaku tipku.
+        cekaj = setTimeout(function () {
+            trazi(upit);
+        }, 250);
+    });
+
+    polje.addEventListener("keydown", function (dogadaj) {
+        if (popis.hidden) {
+            return;
+        }
+        if (dogadaj.key === "ArrowDown") {
+            dogadaj.preventDefault();
+            oznaci(odabrano + 1);
+        } else if (dogadaj.key === "ArrowUp") {
+            dogadaj.preventDefault();
+            oznaci(odabrano - 1);
+        } else if (dogadaj.key === "Enter" && odabrano >= 0) {
+            dogadaj.preventDefault();
+            izaberi(odabrano);
+        } else if (dogadaj.key === "Escape") {
+            zatvori();
+        }
+    });
+
+    polje.addEventListener("blur", function () {
+        setTimeout(zatvori, 120);
+    });
+})();
+</script>
+
+<script>
 // Opis sata ispod trake i ispod UV grafa.
 //
 // Na racunalu je dovoljan `title`, ali mobitel nema prelazak misem pa se
@@ -368,6 +597,7 @@
     function trazi() {
         gumb.disabled = true;
         gumb.textContent = "Trazim...";
+        pokreniUcitavanje();
         navigator.geolocation.getCurrentPosition(otvori, function (error) {
             gumb.disabled = false;
             gumb.textContent = "Nije uspjelo, probaj opet";

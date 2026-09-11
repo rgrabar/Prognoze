@@ -1,0 +1,26 @@
+{% load static %}{% comment %}
+    Traka po satima. Koristi se dvaput - za danas (pomicni prozor) i za
+    sutra (cijeli dan) - pa zivi ovdje da se ne udvostrucuje.
+
+    Ocekuje: `sati` (popis AggregatedHour) i `id` (jedinstven, jer se na
+    njega veze redak s opisom ispod).
+{% endcomment %}
+<div class="traka-omot">
+    <div class="traka" id="{{ id }}">
+        {% for sat in sati %}
+            <div class="sat{% if not sat.sources %} prazno{% endif %}{% if sat.is_now %} trenutni{% endif %}{% if sat.is_past %} proslo{% endif %}{% if sat.starts_day and not forloop.first %} novi-dan{% endif %}"
+                 title="{{ sat.title }}">
+                <div class="kvadrat">
+                    {% if sat.sources %}
+                        <img src="{% static sat.icon %}"
+                             alt="{{ sat.condition_label }}" loading="lazy">
+                    {% endif %}
+                </div>
+                <div class="cas">{{ sat.hour }}</div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# Na mobitelu nema prelaska misem, pa se opis ispisuje ovdje. #}
+<div class="detalj" data-detalj-za="{{ id }}" aria-live="polite"></div>

@@ -160,6 +160,7 @@ class AggregatedHour:
     label: str
     temp_c: Optional[float] = None
     precip_prob: Optional[float] = None
+    precip_mm: Optional[float] = None
     condition: Optional[Condition] = None
     uv: Optional[float] = None
     sources: int = 0
@@ -202,6 +203,10 @@ class AggregatedHour:
             parts.append("{0} C".format(round(self.temp_c, 1)))
         if self.precip_prob is not None:
             parts.append("kisa {0}%".format(round(self.precip_prob)))
+        # Milimetri se pisu samo kad ih ima - "0.0 mm" na svakom vedrom
+        # satu bio bi sum.
+        if self.precip_mm:
+            parts.append("{0} mm".format(self.precip_mm))
         parts.append("{0} izvora".format(self.sources))
         return " | ".join(parts)
 
@@ -215,6 +220,10 @@ class DayForecast:
     min_c: Optional[float] = None
     max_c: Optional[float] = None
     precip_hours: int = 0
+    # Zbroj satnih prosjeka - koliko ce ukupno pasti taj dan.
+    precip_mm: Optional[float] = None
+    # Svih 24 sata - traka za sutra ih prikazuje.
+    hours: List[AggregatedHour] = field(default_factory=list)
 
     @property
     def icon(self):
@@ -231,7 +240,10 @@ class DayForecast:
         if self.min_c is not None and self.max_c is not None:
             parts.append("{0} do {1} C".format(self.min_c, self.max_c))
         if self.precip_hours:
-            parts.append("oborina {0} h".format(self.precip_hours))
+            oborina = "oborina {0} h".format(self.precip_hours)
+            if self.precip_mm:
+                oborina += ", {0} mm".format(self.precip_mm)
+            parts.append(oborina)
         return " | ".join(parts)
 
 
@@ -453,6 +465,15 @@ class Aggregated:
         return sum(1 for s in self.sources if s.ok)
 
     @property
+    def tomorrow_hours(self):
+        """Sutrasnjih 24 sata, ili prazno ako sutra nema podataka."""
+        if not self.days:
+            return []
+        hours = self.days[0].hours
+        # Ako nijedan sat nema izvora, nema se sto pokazati.
+        return hours if any(h.sources for h in hours) else []
+
+    @property
     def local_time_label(self):
         # Formatira se ovdje, a ne u predlosku: Djangov `date` filter bi
         # aware vrijeme pretvorio natrag u TIME_ZONE projekta (UTC).
@@ -487,6 +508,7 @@ def _bucket(indexes, slot_utc, local_zone, current_hour_utc, sun_times):
         label="{0:02d}:00".format(slot_local.hour),
         temp_c=rounded(mean([p.temp_c for p in points])),
         precip_prob=rounded(mean([p.precip_prob for p in points]), 0),
+        precip_mm=rounded(mean([p.precip_mm for p in points])),
         condition=vote([p.condition for p in points]),
         uv=rounded(mean([p.uv for p in points])),
         sources=len(points),
@@ -594,6 +616,7 @@ def build(location, forecasts, now_utc=None):
             continue
 
         temps = [h.temp_c for h in hours if h.temp_c is not None]
+        mm = [h.precip_mm for h in hours if h.precip_mm is not None]
         result.days.append(
             DayForecast(
                 label=_day_label(pocetak, day),
@@ -603,6 +626,8 @@ def build(location, forecasts, now_utc=None):
                 precip_hours=sum(
                     1 for h in hours if h.condition in PRECIPITATION
                 ),
+                precip_mm=rounded(sum(mm)) if mm else None,
+                hours=hours,
             )
         )
 
