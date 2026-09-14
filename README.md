@@ -125,10 +125,30 @@ Mjesto se odreduje samo, redom od najpouzdanijeg prema najgrubljem:
 |---|---|---|---|
 | 1 | `?q=Split` | covjek je sam upisao | tocno |
 | 2 | `?lat=&lon=` | tocna lokacija iz preglednika, uz dopustenje | vrlo tocno |
-| 3 | IP adresa | automatski, bez pitanja | otprilike grad |
-| 4 | Rijeka | ako nista od navedenog ne uspije | - |
+| 3 | kolacic | zadnje mjesto koje je covjek sam trazio | tocno |
+| 4 | IP adresa | automatski, bez pitanja | otprilike grad |
+| 5 | Rijeka | ako nista od navedenog ne uspije | - |
 
 Na stranici uvijek pise koji je nacin upotrijebljen.
+
+**Preglednik pamti zadnje trazeno mjesto.** Upisan ili iz prijedloga
+odabran grad zapise se u kolacic (`prognoze_mjesto`, godinu dana), pa
+sljedeci posjet odmah otvori njega - oznaceno kao "zapamceno". Kolacic nosi
+ime, koordinate i zonu, pa se stranica prikaze **bez ijednog upita za
+mjesto**. Cita ga posluzitelj, a ne JavaScript: tako nema bljeska krivog
+grada pa preusmjeravanja.
+
+Dva pravila oko toga:
+
+* **Zapamceno pobjeduje nad IP-om** - covjek ga je sam trazio, a IP samo
+  pogada grad. Pobjeduje i nad automatskim GPS-om: gumb "Tocna lokacija"
+  ostaje, ali se lokacija vise ne dohvaca sama od sebe, jer bi pregazila
+  izricit izbor.
+* **Gumb "Tocna lokacija" brise zapamceno.** GPS znaci "gdje jesam", a to
+  se mijenja - ne smije se prikovati. Sljedeci posjet se vraca na IP.
+
+Kolacic dolazi od korisnika, pa se sve u njemu provjerava kao svaki drugi
+vanjski ulaz; pokvaren se tiho zanemari.
 
 **Prijedlozi dok se tipka.** Trazilica nudi gradove iz istog Open-Meteo
 geocodinga, ali zvanog izravno iz preglednika - tako ne trosi kvotu

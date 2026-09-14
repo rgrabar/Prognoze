@@ -552,6 +552,120 @@ class DisabledSourcesTests(SimpleTestCase):
         self.assertIn("seven_timer", imena)
 
 
+class RememberedLocationTests(SimpleTestCase):
+    """Preglednik pamti zadnje trazeno mjesto u kolacicu."""
+
+    def test_kolacic_prezivi_put_tamo_i_natrag(self):
+        izvorno = Location(
+            "Čakovec", "Hrvatska", 46.3844, 16.4338,
+            timezone="Europe/Zagreb", source=geocode.BY_QUERY,
+        )
+        vraceno = geocode.from_cookie(geocode.to_cookie(izvorno))
+
+        self.assertEqual(vraceno.name, "Čakovec")
+        self.assertEqual(vraceno.country, "Hrvatska")
+        self.assertEqual(vraceno.latitude, 46.3844)
+        self.assertEqual(vraceno.timezone, "Europe/Zagreb")
+        self.assertEqual(vraceno.source, geocode.BY_REMEMBERED)
+
+    def test_kolacic_je_cisti_ascii(self):
+        # Kolacici smiju nositi samo ASCII; "Č" mora biti escapean.
+        tekst = geocode.to_cookie(Location("Čakovec", "", 46.0, 16.0))
+        self.assertTrue(tekst.isascii())
+
+    def test_pokvaren_kolacic_daje_none(self):
+        for smece in (None, "", "nije json", "{}", '{"n":"X"}',
+                      '{"n":"X","lat":"a","lon":"b"}',
+                      '{"n":"","lat":45,"lon":14}', "[1,2,3]"):
+            with self.subTest(kolacic=smece):
+                self.assertIsNone(geocode.from_cookie(smece))
+
+    def test_zapamceno_ide_prije_ipa_a_poslije_upisanog(self):
+        zapamceno = Location("Rijeka", "", 45.33, 14.44, source=geocode.BY_REMEMBERED)
+
+        with mock.patch.object(geocode, "from_ip") as ip, \
+                mock.patch.object(geocode, "utc_offset_for", return_value=0):
+            # Bez upita: zapamceno pobjeduje, IP se ni ne pita.
+            location = geocode.resolve(ip="8.8.8.8", remembered=zapamceno)
+            self.assertEqual(location.name, "Rijeka")
+            self.assertEqual(location.source, geocode.BY_REMEMBERED)
+            ip.assert_not_called()
+
+        with mock.patch.object(
+            geocode, "search",
+            return_value=Location("Split", "HR", 43.5, 16.4, timezone="Europe/Zagreb"),
+        ), mock.patch.object(geocode, "utc_offset_for", return_value=0):
+            # S upitom: upisano pobjeduje nad zapamcenim.
+            location = geocode.resolve(query="Split", remembered=zapamceno)
+            self.assertEqual(location.name, "Split")
+            self.assertEqual(location.source, geocode.BY_QUERY)
+
+
+class RememberCookieViewTests(SimpleTestCase):
+    """Sto pogled zapise u kolacic, i kad ga brise."""
+
+    def _get(self, path, cookies=None):
+        request = RequestFactory().get(path)
+        request.COOKIES = cookies or {}
+        prazan_zrak = air.AirQuality()
+        with mock.patch.object(providers, "collect", return_value=[]), \
+                mock.patch.object(air, "quality_for", return_value=prazan_zrak), \
+                mock.patch.object(geocode, "utc_offset_for", return_value=0), \
+                mock.patch.object(geocode, "from_ip", return_value=None), \
+                mock.patch.object(
+                    geocode, "search",
+                    return_value=Location("Split", "HR", 43.5, 16.4, timezone="Europe/Zagreb"),
+                ), mock.patch.object(
+                    geocode, "reverse",
+                    return_value=Location("Negdje", "", 45.0, 14.0, source=geocode.BY_PRECISE),
+                ):
+            return views.op(request)
+
+    def test_upisan_grad_se_zapise_u_kolacic(self):
+        response = self._get("/prognoze/?q=Split")
+        kolacic = response.cookies.get(geocode.COOKIE_NAME)
+
+        self.assertIsNotNone(kolacic)
+        self.assertEqual(geocode.from_cookie(kolacic.value).name, "Split")
+        self.assertEqual(kolacic["max-age"], geocode.COOKIE_MAX_AGE)
+        self.assertEqual(kolacic["samesite"], "Lax")
+
+    def test_odabran_iz_prijedloga_se_zapise(self):
+        response = self._get("/prognoze/?lat=45.33&lon=14.44&name=Rijeka&tz=Europe/Zagreb")
+        kolacic = response.cookies.get(geocode.COOKIE_NAME)
+        self.assertEqual(geocode.from_cookie(kolacic.value).name, "Rijeka")
+
+    def test_zapamceno_se_koristi_i_ne_prepisuje(self):
+        kolacic = geocode.to_cookie(Location("Rijeka", "", 45.33, 14.44))
+        response = self._get("/prognoze/", cookies={geocode.COOKIE_NAME: kolacic})
+
+        self.assertContains(response, "Rijeka")
+        self.assertContains(response, "zapamćeno")
+        # Nista novo se ne postavlja niti brise.
+        self.assertNotIn(geocode.COOKIE_NAME, response.cookies)
+
+    def test_tocna_lokacija_brise_zapamceno(self):
+        # GPS bez imena = "gdje jesam", a to se mijenja - kolacic se brise.
+        response = self._get("/prognoze/?lat=45.0&lon=14.0")
+        kolacic = response.cookies.get(geocode.COOKIE_NAME)
+
+        self.assertIsNotNone(kolacic)
+        self.assertEqual(kolacic["max-age"], 0)
+
+    def test_zapamceno_ne_pokrece_gps_samo_od_sebe(self):
+        kolacic = geocode.to_cookie(Location("Rijeka", "", 45.33, 14.44))
+        response = self._get("/prognoze/", cookies={geocode.COOKIE_NAME: kolacic})
+        html = response.content.decode()
+
+        # Gumb postoji, ali automatsko dohvacanje je iskljuceno.
+        self.assertIn('id="tocnije"', html)
+        self.assertIn("var automatski = false;", html)
+
+    def test_bez_kolacica_gps_se_smije_sam_pokrenuti(self):
+        response = self._get("/prognoze/")
+        self.assertIn("var automatski = true;", response.content.decode())
+
+
 class CoordinateTests(SimpleTestCase):
     def test_ispravne_koordinate(self):
         self.assertEqual(_coordinates("45.32", "14.47"), (45.32, 14.47))

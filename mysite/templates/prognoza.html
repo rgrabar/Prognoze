@@ -623,6 +623,16 @@ function pokreniUcitavanje() {
 
     gumb.addEventListener("click", trazi);
 
+    // Smije li se lokacija dohvatiti sama od sebe (uz vec dano dopustenje)?
+    // Ne kad je mjesto zapamceno - covjek ga je sam trazio, pa ga GPS ne
+    // smije pregaziti bez pitanja. Tada gumb samo stoji.
+    var automatski = {% if auto_lokacija %}true{% else %}false{% endif %};
+
+    if (!automatski) {
+        gumb.hidden = false;
+        return;
+    }
+
     // Ako je dopustenje vec dano, ucini to bez pitanja i bez gumba.
     if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: "geolocation" }).then(function (status) {

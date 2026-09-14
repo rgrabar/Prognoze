@@ -4,13 +4,15 @@ Redoslijed je od najpouzdanijeg prema najgrubljem:
 
   1. `?q=Split`      - covjek je sam upisao, to uvijek pobjeduje;
   2. `?lat=&lon=`    - tocna lokacija iz preglednika, uz dopustenje;
-  3. IP adresa       - automatski, bez pitanja, ali samo priblizno;
-  4. Rijeka          - ako nista od navedenog ne uspije.
+  3. kolacic         - zadnje mjesto koje je covjek sam trazio;
+  4. IP adresa       - automatski, bez pitanja, ali samo priblizno;
+  5. Rijeka          - ako nista od navedenog ne uspije.
 
 Sve usluge su besplatne i bez kljuca.
 """
 
 import ipaddress
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -43,8 +45,13 @@ IP_CACHE_SECONDS = 6 * 3600
 # Kako je mjesto odredeno - prikazuje se na stranici.
 BY_QUERY = "upisano"
 BY_PRECISE = "točna lokacija"
+BY_REMEMBERED = "zapamćeno"
 BY_IP = "prema IP adresi"
 BY_DEFAULT = "zadano"
+
+# Kolacic u kojem preglednik pamti zadnje trazeno mjesto.
+COOKIE_NAME = "prognoze_mjesto"
+COOKIE_MAX_AGE = 365 * 24 * 3600
 
 
 @dataclass
@@ -325,6 +332,54 @@ def _coordinates(latitude, longitude):
     return lat, lon
 
 
+def to_cookie(location):
+    """Location -> tekst za kolacic.
+
+    JSON s `ensure_ascii`, jer kolacici smiju nositi samo ASCII - "Čakovec"
+    bi inace mogao proci kroz neki preglednik krivo. Sprema se dovoljno da
+    se stranica prikaze bez ijednog upita: ime, drzava, koordinate i zona.
+    """
+    return json.dumps(
+        {
+            "n": location.name,
+            "c": location.country,
+            "lat": round(location.latitude, 4),
+            "lon": round(location.longitude, 4),
+            "tz": location.timezone,
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+
+def from_cookie(value):
+    """Tekst iz kolacica -> Location, ili None ako je prazan ili pokvaren.
+
+    Kolacic dolazi iz preglednika, dakle od korisnika - sve se provjerava
+    kao i svaki drugi vanjski ulaz.
+    """
+    if not value:
+        return None
+    try:
+        data = json.loads(value)
+        point = _coordinates(data.get("lat"), data.get("lon"))
+        if point is None:
+            return None
+        name = str(data.get("n") or "").strip()[:80]
+        if not name:
+            return None
+        return Location(
+            name=name,
+            country=str(data.get("c") or "").strip()[:80],
+            latitude=point[0],
+            longitude=point[1],
+            timezone=str(data.get("tz") or "").strip()[:64],
+            source=BY_REMEMBERED,
+        )
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def default_location():
     return Location(
         name=DEFAULT_LOCATION.name,
@@ -337,7 +392,13 @@ def default_location():
 
 
 def resolve(
-    query=None, latitude=None, longitude=None, ip=None, name=None, tz=None
+    query=None,
+    latitude=None,
+    longitude=None,
+    ip=None,
+    name=None,
+    tz=None,
+    remembered=None,
 ):
     """Odredi mjesto po redoslijedu iz zaglavlja modula."""
     location = None
@@ -366,6 +427,11 @@ def resolve(
                 )
             else:
                 location = reverse(point[0], point[1])
+
+    # Zapamceno mjesto ide prije IP-a: covjek ga je sam trazio, a IP samo
+    # pogada grad. Nista se ne dohvaca - sve je vec u kolacicu.
+    if location is None and remembered is not None:
+        location = remembered
 
     if location is None and ip:
         location = from_ip(ip)

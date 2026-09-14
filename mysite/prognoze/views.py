@@ -50,6 +50,8 @@ def op(request):
         # Ime i zona stizu samo kad je grad odabran iz prijedloga.
         name=request.GET.get("name"),
         tz=request.GET.get("tz"),
+        # Zadnje mjesto koje je covjek sam trazio, ako ga preglednik pamti.
+        remembered=geocode.from_cookie(request.COOKIES.get(geocode.COOKIE_NAME)),
         ip=client_ip(request),
     )
 
@@ -62,7 +64,7 @@ def op(request):
 
     data = aggregate.build(location, forecasts)
 
-    return render(
+    response = render(
         request,
         "prognoza.html",
         {
@@ -73,10 +75,35 @@ def op(request):
             # Granice raspona za suncanje - da tekst i kod ne razilaze.
             "tan_min": aggregate.TAN_MIN_UV,
             "tan_max": aggregate.TAN_MAX_UV,
-            # Preglednik nudi tocnu lokaciju samo ako mjesto nije vec
-            # izricito upisano ili dobiveno iz koordinata.
-            "moze_tocnije": location.source in (geocode.BY_IP, geocode.BY_DEFAULT),
+            # Gumb za tocnu lokaciju se nudi kad mjesto nije upisano ni
+            # dobiveno iz koordinata - dakle i kad je zapamceno.
+            "moze_tocnije": location.source in (
+                geocode.BY_IP, geocode.BY_DEFAULT, geocode.BY_REMEMBERED
+            ),
+            # Ali se lokacija sama od sebe dohvaca (uz vec dano dopustenje)
+            # samo kad nema niceg boljeg. Zapamceno mjesto je bolje: covjek
+            # ga je sam izabrao, pa ga GPS ne smije pregaziti bez pitanja.
+            "auto_lokacija": location.source in (
+                geocode.BY_IP, geocode.BY_DEFAULT
+            ),
             # Ako bas nijedan izvor nije prosao, reci to umjesto praznih polja.
             "nema_podataka": data.used_sources == 0,
         },
     )
+
+    # Sto se pamti za sljedeci put:
+    #  - upisan ili odabran grad se pamti - to je izricita zelja;
+    #  - tocna lokacija iz preglednika brise zapamceno: covjek je rekao
+    #    "gdje jesam", a to se mijenja, pa se ne smije prikovati.
+    if location.source == geocode.BY_QUERY:
+        response.set_cookie(
+            geocode.COOKIE_NAME,
+            geocode.to_cookie(location),
+            max_age=geocode.COOKIE_MAX_AGE,
+            samesite="Lax",
+            httponly=True,
+        )
+    elif location.source == geocode.BY_PRECISE:
+        response.delete_cookie(geocode.COOKIE_NAME, samesite="Lax")
+
+    return response
