@@ -61,7 +61,7 @@ PRECIPITATION = {
 }
 
 # Kratice dana u tjednu, po `datetime.weekday()` (ponedjeljak = 0).
-WEEKDAYS = ["pon", "uto", "sri", "cet", "pet", "sub", "ned"]
+WEEKDAYS = ["pon", "uto", "sri", "čet", "pet", "sub", "ned"]
 
 
 def day_condition(hours):
@@ -202,7 +202,7 @@ class AggregatedHour:
         if self.temp_c is not None:
             parts.append("{0} C".format(round(self.temp_c, 1)))
         if self.precip_prob is not None:
-            parts.append("kisa {0}%".format(round(self.precip_prob)))
+            parts.append("kiša {0}%".format(round(self.precip_prob)))
         # Milimetri se pisu samo kad ih ima - "0.0 mm" na svakom vedrom
         # satu bio bi sum.
         if self.precip_mm:

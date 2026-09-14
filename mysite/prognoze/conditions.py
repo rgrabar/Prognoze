@@ -57,18 +57,20 @@ NIGHT_ICONS = {
     Condition.PARTLY_CLOUDY: "cloud_moon.png",
 }
 
+# Ovi tekstovi idu na stranicu, pa su s dijakriticima. Kod, komentari i
+# dnevnik ostaju bez njih.
 CONDITION_LABELS = {
     Condition.CLEAR: "vedro",
-    Condition.MAINLY_CLEAR: "pretezno vedro",
-    Condition.PARTLY_CLOUDY: "djelomicno oblacno",
-    Condition.OVERCAST: "oblacno",
+    Condition.MAINLY_CLEAR: "pretežno vedro",
+    Condition.PARTLY_CLOUDY: "djelomično oblačno",
+    Condition.OVERCAST: "oblačno",
     Condition.FOG: "magla",
     Condition.DRIZZLE: "rosulja",
-    Condition.RAIN: "kisa",
-    Condition.SLEET: "susnjezica",
+    Condition.RAIN: "kiša",
+    Condition.SLEET: "susnježica",
     Condition.SNOW: "snijeg",
     Condition.THUNDER: "grmljavina",
-    Condition.THUNDER_HAIL: "grmljavina s tucom",
+    Condition.THUNDER_HAIL: "grmljavina s tučom",
 }
 
 def icon_for(condition, is_night=False):

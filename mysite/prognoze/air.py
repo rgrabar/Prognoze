@@ -28,11 +28,11 @@ CACHE_SECONDS = 600
 # Boje su iz sluzbene palete, malo potamnjene da se citaju na bijelom.
 AQI_BANDS = [
     (20, "dobra", "#1a9e94"),
-    (40, "zadovoljavajuca", "#2e9b7d"),
+    (40, "zadovoljavajuća", "#2e9b7d"),
     (60, "umjerena", "#b09a00"),
-    (80, "losa", "#e03131"),
-    (100, "vrlo losa", "#960032"),
-    (float("inf"), "izuzetno losa", "#7d2181"),
+    (80, "loša", "#e03131"),
+    (100, "vrlo loša", "#960032"),
+    (float("inf"), "izuzetno loša", "#7d2181"),
 ]
 
 
@@ -73,8 +73,8 @@ class AirQuality:
         if self.pm10 is not None:
             parts.append("PM10 {0}".format(self.pm10))
         if not parts:
-            return "Europski indeks kakvoce zraka"
-        return "Europski indeks kakvoce zraka | {0} µg/m³".format(
+            return "Europski indeks kakvoće zraka"
+        return "Europski indeks kakvoće zraka | {0} µg/m³".format(
             " | ".join(parts)
         )
 

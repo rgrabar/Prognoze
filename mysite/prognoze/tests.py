@@ -30,6 +30,7 @@ from .conditions import (
     from_wmo,
     from_wwo,
     icon_for,
+    label_for,
     seven_timer_wind_kph,
     wind_direction,
 )
@@ -296,6 +297,44 @@ class HomeScreenIconTests(SimpleTestCase):
         velicine = {self._png_size(self.STATIC / ime)[0] for ime in ("icon-192.png", "icon-512.png")}
         self.assertIn(192, velicine)
         self.assertIn(512, velicine)
+
+
+class DiacriticsTests(SimpleTestCase):
+    """Tekst koji se vidi u pregledniku nosi hrvatske dijakritike.
+
+    Kod, komentari i dnevnik ih namjerno nemaju - ovo cuva samo ono sto
+    covjek cita na stranici.
+    """
+
+    def test_nazivi_stanja(self):
+        self.assertEqual(label_for(Condition.MAINLY_CLEAR), "pretežno vedro")
+        self.assertEqual(label_for(Condition.PARTLY_CLOUDY), "djelomično oblačno")
+        self.assertEqual(label_for(Condition.OVERCAST), "oblačno")
+        self.assertEqual(label_for(Condition.RAIN), "kiša")
+        self.assertEqual(label_for(Condition.SLEET), "susnježica")
+        self.assertEqual(label_for(Condition.THUNDER_HAIL), "grmljavina s tučom")
+
+    def test_odakle_je_mjesto(self):
+        self.assertEqual(geocode.BY_PRECISE, "točna lokacija")
+
+    def test_dan_u_tjednu(self):
+        self.assertIn("čet", aggregate.WEEKDAYS)
+
+    def test_opis_sata(self):
+        sat = aggregate.AggregatedHour(hour=10, label="", precip_prob=40)
+        self.assertIn("kiša 40%", sat.title)
+
+    def test_kakvoca_zraka(self):
+        self.assertIn("kakvoće", air.AirQuality(aqi=10).title)
+
+    def test_predlozak(self):
+        # Nekoliko natpisa iz predloska, da se vidi da je datoteka UTF-8 i
+        # da su rijeci s dijakriticima stvarno u njoj.
+        path = Path(settings.BASE_DIR) / "templates" / "prognoza.html"
+        html = path.read_text(encoding="utf-8")
+        for rijec in ("Traži", "Točna lokacija", "Učitavam", "sunčanje", "Sljedeći dani"):
+            with self.subTest(rijec=rijec):
+                self.assertIn(rijec, html)
 
 
 class CssVersionTests(SimpleTestCase):
@@ -898,12 +937,12 @@ class AqiBandTests(SimpleTestCase):
     def test_europski_razredi(self):
         self.assertEqual(air.aqi_band(0)[0], "dobra")
         self.assertEqual(air.aqi_band(20)[0], "dobra")
-        self.assertEqual(air.aqi_band(21)[0], "zadovoljavajuca")
-        self.assertEqual(air.aqi_band(40)[0], "zadovoljavajuca")
+        self.assertEqual(air.aqi_band(21)[0], "zadovoljavajuća")
+        self.assertEqual(air.aqi_band(40)[0], "zadovoljavajuća")
         self.assertEqual(air.aqi_band(50)[0], "umjerena")
-        self.assertEqual(air.aqi_band(70)[0], "losa")
-        self.assertEqual(air.aqi_band(90)[0], "vrlo losa")
-        self.assertEqual(air.aqi_band(140)[0], "izuzetno losa")
+        self.assertEqual(air.aqi_band(70)[0], "loša")
+        self.assertEqual(air.aqi_band(90)[0], "vrlo loša")
+        self.assertEqual(air.aqi_band(140)[0], "izuzetno loša")
 
     def test_bez_vrijednosti(self):
         self.assertEqual(air.aqi_band(None)[0], "nepoznato")

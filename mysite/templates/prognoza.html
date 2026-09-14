@@ -31,7 +31,7 @@
 <body>
 <div class="ucitavanje" id="ucitavanje" hidden>
     <span class="ucitavanje-crta"></span>
-    <span class="ucitavanje-poruka">Ucitavam prognozu...</span>
+    <span class="ucitavanje-poruka">Učitavam prognozu...</span>
 </div>
 
 <div class="omot">
@@ -44,12 +44,12 @@
                    aria-controls="prijedlozi" aria-autocomplete="list">
             <ul class="prijedlozi" id="prijedlozi" role="listbox" hidden></ul>
         </div>
-        <button type="submit">Trazi</button>
+        <button type="submit">Traži</button>
     </form>
 
     {% if nema_podataka %}
         <div class="upozorenje">
-            Nijedan izvor trenutno ne odgovara. Provjeri internet pa osvjezi.
+            Nijedan izvor trenutno ne odgovara. Provjeri internet pa osvježi.
         </div>
     {% endif %}
 
@@ -63,7 +63,7 @@
             </span>
             {% if moze_tocnije %}
                 <button type="button" id="tocnije" class="tocnije" hidden>
-                    Tocna lokacija
+                    Točna lokacija
                 </button>
             {% endif %}
         </div>
@@ -102,14 +102,14 @@
                         {% if prognoza.wind_dir %}
                             <img src="{% static prognoza.wind_dir|add:'.png' %}"
                                  alt="vjetar iz smjera {{ prognoza.wind_dir }}"
-                                 title="vjetar puse iz smjera {{ prognoza.wind_dir }}">
+                                 title="vjetar puše iz smjera {{ prognoza.wind_dir }}">
                         {% endif %}
                     </div>
                 </div>
 
                 <div class="podatak">
                     <div class="veliko">{{ prognoza.precip_prob|default_if_none:"?" }}%</div>
-                    <img src="{% static 'umbrella.png' %}" alt="vjerojatnost kise"
+                    <img src="{% static 'umbrella.png' %}" alt="vjerojatnost kiše"
                          title="vjerojatnost oborina">
                 </div>
 
@@ -198,7 +198,7 @@
                         <div class="oznaka">UV indeks danas</div>
                         {% if prognoza.uv_peak_hour %}
                             <div class="uv-vrhunac">
-                                najvise <strong style="color: {{ prognoza.uv_max_color }}">{{ prognoza.uv_max }}</strong>
+                                najviše <strong style="color: {{ prognoza.uv_max_color }}">{{ prognoza.uv_max }}</strong>
                                 ({{ prognoza.uv_max_label }}) u {{ prognoza.uv_peak_hour.label }}
                             </div>
                         {% endif %}
@@ -252,7 +252,7 @@
 
                 {% if prognoza.days %}
                     <div class="pet-dana">
-                        <div class="oznaka">Sljedeci dani</div>
+                        <div class="oznaka">Sljedeći dani</div>
                         {% for dan in prognoza.days %}
                             <div class="dan" title="{{ dan.title }}">
                                 <span class="dan-ime">{{ dan.label }}</span>
@@ -270,21 +270,21 @@
 
             <p class="suncanje">
                 {% if prognoza.tanning_label %}
-                    <strong>Najbolji sati za suncanje:</strong>
+                    <strong>Najbolji sati za sunčanje:</strong>
                     {{ prognoza.tanning_label }}
                     <span class="sitno">
-                        &mdash; tada je UV izmedu {{ tan_min|floatformat:0 }} i
-                        {{ tan_max|floatformat:0 }}: dovoljno da koza potamni,
-                        a jos ne toliko da brzo izgori. Koliko brzo tko
-                        pocrveni ovisi o tipu koze.
+                        &mdash; tada je UV između {{ tan_min|floatformat:0 }} i
+                        {{ tan_max|floatformat:0 }}: dovoljno da koža potamni,
+                        a još ne toliko da brzo izgori. Koliko brzo tko
+                        pocrveni ovisi o tipu kože.
                     </span>
                 {% else %}
-                    <strong>Danas nema sati pogodnih za suncanje.</strong>
+                    <strong>Danas nema sati pogodnih za sunčanje.</strong>
                     <span class="sitno">
-                        Nijedan sat nema UV izmedu
+                        Nijedan sat nema UV između
                         {{ tan_min|floatformat:0 }} i
                         {{ tan_max|floatformat:0 }} &mdash; ili je preslab da
-                        koza potamni, ili prejak da bude ugodno.
+                        koža potamni, ili prejak da bude ugodno.
                     </span>
                 {% endif %}
             </p>
@@ -612,7 +612,7 @@ function pokreniUcitavanje() {
 
     function trazi() {
         gumb.disabled = true;
-        gumb.textContent = "Trazim...";
+        gumb.textContent = "Tražim...";
         pokreniUcitavanje();
         navigator.geolocation.getCurrentPosition(otvori, function (error) {
             gumb.disabled = false;

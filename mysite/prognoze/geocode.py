@@ -42,7 +42,7 @@ IP_CACHE_SECONDS = 6 * 3600
 
 # Kako je mjesto odredeno - prikazuje se na stranici.
 BY_QUERY = "upisano"
-BY_PRECISE = "tocna lokacija"
+BY_PRECISE = "točna lokacija"
 BY_IP = "prema IP adresi"
 BY_DEFAULT = "zadano"
 
