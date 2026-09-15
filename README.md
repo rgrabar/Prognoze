@@ -290,6 +290,19 @@ je `current` prije davao.
 Ako zajednicki zahtjev padne, padnu svi modeli odjednom - ali se svaki i
 dalje pojavi u popisu izvora kao nedostupan, umjesto da ih sest nestane.
 
+## Raspored stranice
+
+Kartice su podijeljene po vremenu na koje se odnose:
+
+* **gornja kartica** - trenutno stanje (temperatura, vjetar, UV, zrak);
+* **Danas** - traka po satima, izlazak i zalazak sunca, UV graf, sati za
+  suncanje;
+* **Sljedeci dani** - pregled pet dana i, sklopljeno, sutra po satima;
+* **Izvori** - tko je sto rekao.
+
+Prije su sutra po satima i pregled dana bili razbacani po danasnjim
+karticama.
+
 ## Traka po satima
 
 Traka je pomicni prozor oko sadasnjeg trenutka: **8 sati unatrag i 16
@@ -307,18 +320,25 @@ Odabir dodirom ostaje, a kad mis ode s trake redak se vraca na trenutni sat.
 `title` namjerno ostaje u HTML-u: ako JavaScript ne radi, na racunalu se
 opis i dalje vidi kao obicni oblacic.
 
-### Sutra po satima
+### Dani po satima
 
-Ispod danasnje trake stoji i sutrasnja - svih 24 sata - ali **sklopljena**
-dok je se ne otvori, da ne udvostruci visinu stranice onima koje zanima
-samo danas. Sklapanje radi preko `<details>`, dakle bez JavaScripta, i u
-sazetku pise stanje i raspon temperature pa se vidi i zatvorena.
+U kartici "Sljedeci dani", ispod pregleda dana, stoji za **svaki od pet
+dana** i traka po satima - svih 24 sata - ali **sklopljena** dok je se ne
+otvori, da ne upeterostruci visinu stranice onima koje zanima samo danas.
+Sklapanje radi preko `<details>`, dakle bez JavaScripta, i u sazetku pise
+ime dana, stanje i raspon temperature pa se vidi i zatvorena. Naslov "Po
+satima" stoji jednom iznad popisa, a redci nose samo ime dana - pet puta
+"po satima" jedno ispod drugoga citalo se kao mucanje. Dan do kojeg nijedan
+izvor ne doseze traku nema - sklopljeni red s praznim kvadratima samo
+zbunjuje.
 
-Podaci za nju se ionako racunaju za popis dana sa strane - samo se vise ne
-bacaju. Ne kosta nijedan dodatni zahtjev.
+Podaci za njih se ionako racunaju za pregled dana - samo se vise ne bacaju.
+Ne kosta nijedan dodatni zahtjev.
 
-Obje trake dijele isti predlozak (`_traka.html`), pa se opis sata na dodir
-i sve ostalo ponasa jednako. Sutra nema "trenutnog" ni "proslog" sata.
+Sve trake dijele isti predlozak (`_traka.html`), pa se opis sata na dodir
+i sve ostalo ponasa jednako; svaka ima svoj id (`traka-dan-1` do `-5`) na
+koji se veze njezin redak s opisom. Sljedeci dani nemaju "trenutnog" ni
+"proslog" sata.
 
 `min` i `max` se i dalje racunaju za **danasnji kalendarski dan**, zasebno
 od prozora - inace bi "najvisa danas" znacila nesto drugo nego sto pise.
@@ -355,7 +375,7 @@ ispuna ima okomiti gradijent po istim razredima: sto krivulja vise ide, to
 prolazi kroz jaci razred. Preko grafa lezi prozirna mreza od 24 polja, samo
 zato da svaki sat ima svoj opis pri prelasku misem.
 
-Desno od grafa stoje izlazak i zalazak sunca te trajanje dana. Taj se
+Lijevo od grafa stoje izlazak i zalazak sunca te trajanje dana. Taj se
 podatak ionako vec dohvaca (za odabir sunca ili mjeseca u traci), a uz UV
 ide prirodno - krivulja pocinje na izlasku i zavrsava na zalasku.
 
@@ -408,10 +428,32 @@ UV daju samo neki izvori:
 
 ## Sljedeci dani
 
-Desno od UV grafa stoji kratka prognoza za `FORECAST_DAYS` (4) dana: jedna
+U kartici "Sljedeci dani" stoji pregled `FORECAST_DAYS` (5) dana u redu: jedna
 slikica po danu, uz najvisu i najnizu temperaturu. **Danas nije medu njima**
 - vec stoji u gornjoj kartici i u traci po satima, pa bi se samo ponavljao.
 Danasnji se sati i dalje racunaju, jer o njima ovise UV graf i min/max.
+
+Broj dana **ne kosta dodatne pozive**: svaki je izvor jedan zahtjev po mjestu
+(i tako se kesira 10 minuta), a koliko dana vraca samo je parametar u tom
+zahtjevu. Open-Meteo se trazi `FORECAST_DAYS + 2` dana - danas, pa dani sa
+strane, pa jos jedan da zadnji bude cijeli i zapadno od Greenwicha, gdje
+lokalna ponoc pada u sutrasnji UTC dan.
+
+Koliko koji izvor doseze (izmjereno za Rijeku):
+
+| Izvor | Doseg | Gustoca na petom danu |
+|---|---|---|
+| Open-Meteo best_match, GFS, ECMWF, UKMO, GEM | 7-16 dana | po satu |
+| Open-Meteo ARPEGE (Meteo-France) | **4 dana** - granica modela | nema |
+| met.no | 9 dana | svakih 6 sati od treceg dana |
+| 7Timer! | 8 dana | svaka 3 sata |
+| Tomorrow.io | 120 sati - granica besplatnog plana po satu | vecina dana |
+| WeatherAPI | 3 dana - granica besplatnog plana | nema (nema ga ni na trecem) |
+
+Peti dan tako stoji na sedam-osam izvora umjesto devet, sto je otprilike
+isto kao cetvrti. Sesti bi vec ostao na cetiri-pet modela, pa se ne prikazuje.
+Sati koje neki izvor nema jednostavno **ne ulaze u prosjek** za taj sat -
+isti mehanizam kao kad izvor padne.
 
 Slikica pokazuje **ono sto je za taj dan najvaznije**, a ne ono cega je
 najvise:

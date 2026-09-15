@@ -19,6 +19,7 @@ Dokumentacija: https://open-meteo.com/en/docs
 
 from datetime import datetime, timezone
 
+from ..aggregate import FORECAST_DAYS
 from ..conditions import from_wmo
 from .base import (
     HourPoint,
@@ -118,9 +119,11 @@ class OpenMeteoProvider(Provider):
                 # Lokalna ponoc pada u jucerasnji UTC dan (Rijeka je +1/+2),
                 # pa bez `past_days` prvi sati danasnje trake ostanu prazni.
                 "past_days": 1,
-                # Danas plus cetiri dana za prognozu sa strane, i jos jedan
-                # da zadnji dan bude cijeli i nakon pomaka zone.
-                "forecast_days": 6,
+                # Danas plus dani za kratku prognozu, i jos jedan da zadnji
+                # dan bude cijeli i nakon pomaka zone: zapadno od Greenwicha
+                # lokalna ponoc pada u sutrasnji UTC dan. Jedan zahtjev je
+                # jednako skup bez obzira na broj dana.
+                "forecast_days": FORECAST_DAYS + 2,
             },
         )
 

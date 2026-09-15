@@ -734,6 +734,20 @@ class OpenMeteoGroupTests(SimpleTestCase):
         modeli = poziv.call_args.kwargs["params"]["models"].split(",")
         self.assertEqual(modeli, [m.key for m in open_meteo.MODELS])
 
+    def test_trazi_dovoljno_dana_za_kratku_prognozu(self):
+        # Broj dana u zahtjevu prati broj dana na stranici: danas, dani sa
+        # strane, i jos jedan da zadnji bude cijeli i zapadno od Greenwicha.
+        # Inace bi peti dan zapadno od nule ostao bez veceri.
+        provider = open_meteo.OpenMeteoProvider()
+        with mock.patch.object(
+            provider, "get_json", return_value=self._payload()
+        ) as poziv:
+            provider.fetch(Location("Rijeka", "HR", 45.32, 14.47))
+
+        params = poziv.call_args.kwargs["params"]
+        self.assertEqual(params["forecast_days"], aggregate.FORECAST_DAYS + 2)
+        self.assertEqual(params["past_days"], 1)
+
     def test_gem_ne_glasa_o_vjerojatnosti_oborine(self):
         # GEM je za vedar dan javljao 71% kise uz 0.0 mm i kod "vedro".
         forecasts = {f.name: f for f in self._fetch()}
@@ -1480,6 +1494,38 @@ class AggregateBuildTests(SimpleTestCase):
         self.assertFalse(any(h.is_now for h in sutra))
         self.assertFalse(any(h.is_past for h in sutra))
         self.assertTrue(all(h.condition == Condition.RAIN for h in sutra))
+
+    def test_svaki_dan_ima_puno_ime_i_vlastitu_traku(self):
+        # 2026-09-02 je srijeda; sutra je cetvrtak, pa petak...
+        forecasts = [self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)]
+        result = aggregate.build(self.location, forecasts, now_utc=self.now)
+
+        self.assertEqual(
+            [dan.long_label for dan in result.days],
+            ["sutra", "petak", "subota", "nedjelja", "ponedjeljak"],
+        )
+        self.assertEqual(
+            [dan.strip_id for dan in result.days],
+            ["traka-dan-1", "traka-dan-2", "traka-dan-3", "traka-dan-4", "traka-dan-5"],
+        )
+        # Svaki dan nosi svih 24 sata, i onda kad su prazni.
+        for dan in result.days:
+            self.assertEqual([h.hour for h in dan.hours], list(range(24)))
+
+    def test_dan_do_kojeg_izvori_ne_dosezu_nema_trake(self):
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        # Prosiri niz da pokrije sutra i prekosutra, ali ne dalje.
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 49):
+            forecast.hours.append(
+                HourPoint(time=zadnji + timedelta(hours=i), temp_c=15.0)
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(
+            [dan.has_hours for dan in result.days],
+            [True, True, False, False, False],
+        )
 
     def test_sutra_bez_podataka_je_prazno(self):
         # Izvor pokriva samo danas.

@@ -142,32 +142,19 @@
         </div>
     </div>
 
+    {% comment %}
+        Dvije kartice po vremenu na koje se odnose: sve za danas u jednoj
+        (sati, sunce, UV), sve za sljedece dane u drugoj (dani po satima,
+        pregled dana). Prije su bile pomijesane.
+    {% endcomment %}
     <div class="karta">
-        <div class="oznaka">Po satima &middot; 8 unatrag, 16 unaprijed</div>
+        <h2 class="naslov">Danas</h2>
 
+        <div class="oznaka">Po satima &middot; 8 unatrag, 16 unaprijed</div>
         {% include "_traka.html" with sati=prognoza.hours id="traka-sati" %}
 
-        {% if prognoza.tomorrow_hours %}
-            {% comment %}
-                Sutrasnji dan po satima, sklopljen dok ga se ne otvori -
-                da ne udvostruci visinu stranice onima koje zanima samo
-                danas. <details> to daje bez JavaScripta.
-            {% endcomment %}
-            <details class="sutra">
-                <summary>
-                    <span class="oznaka">Sutra po satima</span>
-                    <span class="sitno">{{ prognoza.days.0.condition_label }}
-                        &middot; {{ prognoza.days.0.min_c|default_if_none:"?" }}
-                        do {{ prognoza.days.0.max_c|default_if_none:"?" }}&deg;C</span>
-                </summary>
-                {% include "_traka.html" with sati=prognoza.tomorrow_hours id="traka-sutra" %}
-            </details>
-        {% endif %}
-    </div>
-
-    {% if prognoza.has_uv %}
-        <div class="karta">
-            <div class="uv-tijelo">
+        {% if prognoza.has_uv or prognoza.sunrise_label %}
+            <div class="odjeljak uv-tijelo">
                 {% if prognoza.sunrise_label %}
                     <div class="sunce">
                         <div class="sunce-red">
@@ -188,6 +175,7 @@
                     </div>
                 {% endif %}
 
+                {% if prognoza.has_uv %}
                 <div class="uv-glavni">
                     {% comment %}
                         Naslov ide uz graf, a ne iznad cijele kartice -
@@ -249,25 +237,11 @@
 
                     <div class="detalj" data-detalj-za="uv-mreza" aria-live="polite"></div>
                 </div>
-
-                {% if prognoza.days %}
-                    <div class="pet-dana">
-                        <div class="oznaka">Sljedeći dani</div>
-                        {% for dan in prognoza.days %}
-                            <div class="dan" title="{{ dan.title }}">
-                                <span class="dan-ime">{{ dan.label }}</span>
-                                <img src="{% static dan.icon %}"
-                                     alt="{{ dan.condition_label }}" loading="lazy">
-                                <span class="dan-temp">
-                                    {{ dan.max_c|default_if_none:"?" }}&deg;
-                                    <span class="sitno">{{ dan.min_c|default_if_none:"?" }}&deg;</span>
-                                </span>
-                            </div>
-                        {% endfor %}
-                    </div>
                 {% endif %}
             </div>
+        {% endif %}
 
+        {% if prognoza.has_uv %}
             <p class="suncanje">
                 {% if prognoza.tanning_label %}
                     <strong>Najbolji sati za sunčanje:</strong>
@@ -288,6 +262,48 @@
                     </span>
                 {% endif %}
             </p>
+        {% endif %}
+    </div>
+
+    {% if prognoza.days %}
+        <div class="karta">
+            <h2 class="naslov">Sljedeći dani</h2>
+
+            <div class="dani">
+                {% for dan in prognoza.days %}
+                    <div class="dan" title="{{ dan.title }}">
+                        <span class="dan-ime">{{ dan.label }}</span>
+                        <img src="{% static dan.icon %}"
+                             alt="{{ dan.condition_label }}" loading="lazy">
+                        <span class="dan-temp">
+                            {{ dan.max_c|default_if_none:"?" }}&deg;
+                            <span class="sitno">{{ dan.min_c|default_if_none:"?" }}&deg;</span>
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% comment %}
+                Svaki dan i po satima, sklopljen dok ga se ne otvori -
+                pregled dana iznad je dovoljan vecini. <details> to daje
+                bez JavaScripta. Dan do kojeg izvori ne dosezu se preskace.
+            {% endcomment %}
+            <div class="po-danima">
+                <div class="oznaka">Po satima</div>
+                {% for dan in prognoza.days %}
+                    {% if dan.has_hours %}
+                        <details class="po-satima">
+                            <summary>
+                                <span class="dan-naslov">{{ dan.long_label|capfirst }}</span>
+                                <span class="sitno">{{ dan.condition_label }}
+                                    &middot; {{ dan.min_c|default_if_none:"?" }}
+                                    do {{ dan.max_c|default_if_none:"?" }}&deg;C</span>
+                            </summary>
+                            {% include "_traka.html" with sati=dan.hours id=dan.strip_id %}
+                        </details>
+                    {% endif %}
+                {% endfor %}
+            </div>
         </div>
     {% endif %}
 

@@ -44,9 +44,15 @@ TAN_MAX_UV = 6.0
 # podataka nema, uzme se ovaj raspon.
 UV_WINDOW_FALLBACK = (6, 21)
 
-# Koliko dana ima kratka prognoza sa strane. Danas nije medu njima - stoji
-# vec u gornjoj kartici i u traci po satima, pa bi se samo ponavljao.
-FORECAST_DAYS = 4
+# Koliko dana ima kratka prognoza u kartici "Sljedeci dani". Danas nije medu
+# njima - stoji vec u gornjoj kartici i u traci po satima, pa bi se samo
+# ponavljao.
+#
+# Pet je granica do koje vecina izvora jos ima sto reci: GFS, ECMWF, UKMO,
+# GEM i met.no idu i dalje, Tomorrow.io daje tocno 120 sati, a ARPEGE staje
+# na cetiri dana i WeatherAPI (besplatan) na tri, pa su zadnji dani i onako
+# na manje izvora. Sesti dan bi ostao na cetiri-pet modela.
+FORECAST_DAYS = 5
 
 # Stanja koja se broje kao dogadaj: dovoljan je jedan sat da obiljeze dan.
 # Naoblaka nije medu njima - jedan oblacan sat ne cini dan oblacnim, dok
@@ -62,6 +68,10 @@ PRECIPITATION = {
 
 # Kratice dana u tjednu, po `datetime.weekday()` (ponedjeljak = 0).
 WEEKDAYS = ["pon", "uto", "sri", "čet", "pet", "sub", "ned"]
+# Puna imena za naslove traka po satima ("četvrtak po satima").
+WEEKDAYS_LONG = [
+    "ponedjeljak", "utorak", "srijeda", "četvrtak", "petak", "subota", "nedjelja",
+]
 
 
 def day_condition(hours):
@@ -216,14 +226,32 @@ class DayForecast:
     """Jedan dan u kratkoj prognozi sa strane."""
 
     label: str
+    # Puno ime za naslov trake: "sutra", "četvrtak"...
+    long_label: str = ""
+    # Koliko dana od danas (sutra = 1). Daje traci jedinstven id.
+    offset: int = 0
     condition: Optional[Condition] = None
     min_c: Optional[float] = None
     max_c: Optional[float] = None
     precip_hours: int = 0
     # Zbroj satnih prosjeka - koliko ce ukupno pasti taj dan.
     precip_mm: Optional[float] = None
-    # Svih 24 sata - traka za sutra ih prikazuje.
+    # Svih 24 sata - sklopljena traka po satima ih prikazuje.
     hours: List[AggregatedHour] = field(default_factory=list)
+
+    @property
+    def strip_id(self):
+        """Id trake po satima - redak s opisom ispod se veze na njega."""
+        return "traka-dan-{0}".format(self.offset)
+
+    @property
+    def has_hours(self):
+        """Ima li se sto pokazati u traci: bar jedan sat s izvorom.
+
+        Zadnji dani znaju biti prazni kad izvori ne dosezu tako daleko,
+        pa se traka bez podataka ne nudi - sklopljeni red s praznim
+        kvadratima samo zbunjuje."""
+        return any(h.sources for h in self.hours)
 
     @property
     def icon(self):
@@ -467,11 +495,9 @@ class Aggregated:
     @property
     def tomorrow_hours(self):
         """Sutrasnjih 24 sata, ili prazno ako sutra nema podataka."""
-        if not self.days:
+        if not self.days or not self.days[0].has_hours:
             return []
-        hours = self.days[0].hours
-        # Ako nijedan sat nema izvora, nema se sto pokazati.
-        return hours if any(h.sources for h in hours) else []
+        return self.days[0].hours
 
     @property
     def local_time_label(self):
@@ -494,6 +520,13 @@ def _day_label(moment, offset):
     if offset == 1:
         return "sutra"
     return WEEKDAYS[moment.weekday()]
+
+
+def _day_long_label(moment, offset):
+    """Puno ime dana za naslov trake: sutra, pa ime dana u tjednu."""
+    if offset == 1:
+        return "sutra"
+    return WEEKDAYS_LONG[moment.weekday()]
 
 
 def _bucket(indexes, slot_utc, local_zone, current_hour_utc, sun_times):
@@ -593,7 +626,7 @@ def build(location, forecasts, now_utc=None):
     # --- kalendarski dani ---
     # Danasnji dan se racuna zasebno od trake gore, jer prozor prelazi u
     # sutra pa bi inace "najvisa danas" znacila nesto drugo nego sto pise.
-    # Isti dan koristi i UV graf, a svih pet kratka prognoza sa strane.
+    # Isti dan koristi i UV graf, a sljedece kratka prognoza po danima.
     local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Dan 0 se racuna zbog UV grafa i min/max, ali se ne prikazuje medu
@@ -620,6 +653,8 @@ def build(location, forecasts, now_utc=None):
         result.days.append(
             DayForecast(
                 label=_day_label(pocetak, day),
+                long_label=_day_long_label(pocetak, day),
+                offset=day,
                 condition=day_condition(hours),
                 min_c=rounded(min(temps)) if temps else None,
                 max_c=rounded(max(temps)) if temps else None,

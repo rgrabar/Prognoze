@@ -236,6 +236,20 @@ body {
     font-size: 22px;
 }
 
+/* Naslov kartice - "Danas", "Sljedeci dani". */
+.naslov {
+    margin: 0 0 10px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* Odjeljak unutar kartice, odvojen crtom od onoga iznad. */
+.odjeljak {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--linija);
+}
+
 .mjesto .sitno {
     color: var(--slabo);
     font-size: 14px;
@@ -436,15 +450,34 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
-/* --- sutra po satima (sklopljeno) --- */
+/* --- dani po satima (sklopljeno) --- */
 
-.sutra {
+/* Jedan naslov "Po satima", pa ispod popis sklopljenih traka - jedna po
+   danu, odvojene tankom crtom. Naslov je jednom, a ne u svakom retku:
+   pet puta "po satima" jedno ispod drugoga citalo se kao mucanje. */
+.po-danima {
     margin-top: 14px;
     padding-top: 12px;
     border-top: 1px solid var(--linija);
 }
 
-.sutra summary {
+.po-danima .oznaka {
+    margin-bottom: 4px;
+}
+
+.po-satima {
+    padding: 9px 0;
+}
+
+.po-satima + .po-satima {
+    border-top: 1px solid var(--linija);
+}
+
+.dan-naslov {
+    font-weight: 500;
+}
+
+.po-satima summary {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -455,7 +488,7 @@ body {
 }
 
 /* Vlastita strelica, jer se ona ugradena ne da urediti jednako svugdje. */
-.sutra summary::before {
+.po-satima summary::before {
     content: "";
     width: 7px;
     height: 7px;
@@ -467,15 +500,15 @@ body {
     margin-right: 2px;
 }
 
-.sutra[open] summary::before {
+.po-satima[open] summary::before {
     transform: rotate(45deg);
 }
 
-.sutra summary::-webkit-details-marker {
+.po-satima summary::-webkit-details-marker {
     display: none;
 }
 
-.sutra summary .sitno {
+.po-satima summary .sitno {
     color: var(--slabo);
     font-size: 13px;
 }
@@ -532,12 +565,13 @@ body {
 }
 
 /* Sunce lijevo, graf desno; na uskom zaslonu jedno ispod drugoga. */
+/* `.odjeljak` na istom elementu daje razmak i crtu prema traci iznad;
+   ovdje samo raspored. */
 .uv-tijelo {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 20px;
-    margin-top: 4px;
 }
 
 .uv-glavni {
@@ -617,28 +651,34 @@ body {
     text-align: center;
 }
 
-/* --- pet dana --- */
+/* --- sljedeci dani --- */
 
-.pet-dana {
-    flex: 0 0 auto;
+/* Pet dana jedan uz drugoga, svaki kao stupac: ime, slikica, temperature.
+   Na uskom zaslonu stanu i dalje - pet stupaca po ~55 px. */
+.dani {
+    display: grid;
+    /* minmax(0, 1fr), ne samo 1fr: `1fr` se ne moze stisnuti ispod sirine
+       sadrzaja, pa bi na uskom zaslonu stupci prerasli karticu i stranica
+       bi se pomicala vodoravno. */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.dani .dan {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding-left: 20px;
-    border-left: 1px solid var(--linija);
-}
-
-.pet-dana .dan {
-    display: grid;
-    grid-template-columns: 44px 26px auto;
     align-items: center;
-    gap: 8px;
-    padding: 2px 0;
+    gap: 6px;
+    padding: 10px 4px;
+    border-radius: 10px;
+    background: var(--sat-plava);
+    text-align: center;
 }
 
-.pet-dana .dan img {
-    width: 26px;
-    height: 26px;
+.dani .dan img {
+    width: 34px;
+    height: 34px;
     object-fit: contain;
 }
 
@@ -647,17 +687,27 @@ body {
     color: var(--slabo);
 }
 
+/* Najvisa i najniza jedna do druge; kad stupac postane preuzak,
+   najniza sama prelomi u novi red umjesto da viri iz celije. */
 .dan-temp {
-    font-size: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 6px;
+    font-size: 15px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
 }
 
-/* Kad se tri stupca sloze jedan ispod drugoga, okomite crte nemaju
-   smisla - postaju vodoravne.
+.dan-temp .sitno {
+    font-weight: 400;
+}
 
-   Ovo mora doci POSLIJE `.sunce` i `.pet-dana`, inace ga oni nadjacaju:
-   ista tezina, a definirani su nize u datoteci. */
+/* Kad se sunce i graf sloze jedno ispod drugoga, okomita crta nema
+   smisla - postaje vodoravna.
+
+   Ovo mora doci POSLIJE `.sunce`, inace ga ono nadjaca: ista tezina, a
+   definirano je nize u datoteci. */
 @media (max-width: 860px) {
     .sunce {
         width: 100%;
@@ -666,13 +716,21 @@ body {
         padding-bottom: 12px;
         border-bottom: 1px solid var(--linija);
     }
+}
 
-    .pet-dana {
-        width: 100%;
-        padding-left: 0;
-        border-left: 0;
-        padding-top: 12px;
-        border-top: 1px solid var(--linija);
+/* Na mobitelu pet stupaca dijeli ~300 px: uzi razmaci i malo sitnije
+   brojke, da i "-10.4" stane u stupac bez prelamanja stupnja u novi red. */
+@media (max-width: 420px) {
+    .dani {
+        gap: 5px;
+    }
+
+    .dani .dan {
+        padding: 8px 2px;
+    }
+
+    .dan-temp {
+        font-size: 14px;
     }
 }
 

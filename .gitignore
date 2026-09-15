@@ -16,3 +16,6 @@ staticfiles/
 .idea/
 *.swp
 .DS_Store
+
+# lokalna postavka za pregled u Claude Code
+.claude/
