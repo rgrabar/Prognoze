@@ -138,14 +138,24 @@ ime, koordinate i zonu, pa se stranica prikaze **bez ijednog upita za
 mjesto**. Cita ga posluzitelj, a ne JavaScript: tako nema bljeska krivog
 grada pa preusmjeravanja.
 
-Dva pravila oko toga:
+**Tocna lokacija je prekidac**, i uvijek je na stranici: dok je iskljucena
+stoji gumb "Tocna lokacija", dok je ukljucena veza "Iskljuci tocnu
+lokaciju". Isti kolacic uz grad nosi i tu zelju (`gps`: `da` ili `ne`):
 
-* **Zapamceno pobjeduje nad IP-om** - covjek ga je sam trazio, a IP samo
-  pogada grad. Pobjeduje i nad automatskim GPS-om: gumb "Tocna lokacija"
-  ostaje, ali se lokacija vise ne dohvaca sama od sebe, jer bi pregazila
-  izricit izbor.
-* **Gumb "Tocna lokacija" brise zapamceno.** GPS znaci "gdje jesam", a to
-  se mijenja - ne smije se prikovati. Sljedeci posjet se vraca na IP.
+* **Ukljucena** (`da`): lokacija se na svakom posjetu dohvaca sama od sebe,
+  uz vec dano dopustenje preglednika. Pamti se zelja, a ne koordinate -
+  "gdje jesam" se mijenja. Zapamcen grad ostaje ispod, da se ima kamo
+  vratiti.
+* **Iskljucena** (`ne`): nikad sama od sebe, ni kad grad nije zapamcen.
+  Bez toga bi se sljedeci posjet opet sam dohvatio, i ne bi se dala
+  iskljuciti. Veza vodi na `?tocno=ne`, sto vrijedi vec za tu stranicu.
+* **Bez oznake** (prvi posjet): sama od sebe samo kad nista nije
+  zapamceno; zapamcen grad pobjeduje, jer ga je covjek sam izabrao.
+
+**Zadnji izricit izbor pobjeduje.** Upisan ili odabran grad se pamti, a
+tocna lokacija se time gasi - ali gumb ostaje, pa se uvijek moze natrag na
+"gdje jesam". Zapamceno pobjeduje i nad IP-om: covjek ga je sam trazio, a
+IP samo pogada grad.
 
 Kolacic dolazi od korisnika, pa se sve u njemu provjerava kao svaki drugi
 vanjski ulaz; pokvaren se tiho zanemari.

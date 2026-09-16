@@ -61,7 +61,11 @@
                 prosjek {{ prognoza.used_sources }} izvora &middot;
                 <span class="odakle">{{ prognoza.location.source }}</span>
             </span>
-            {% if moze_tocnije %}
+            {% if tocno_ukljuceno %}
+                <a id="iskljuci" class="tocnije" href="?tocno=ne">
+                    Isključi točnu lokaciju
+                </a>
+            {% else %}
                 <button type="button" id="tocnije" class="tocnije" hidden>
                     Točna lokacija
                 </button>
@@ -344,6 +348,10 @@ function pokreniUcitavanje() {
     if (forma) {
         forma.addEventListener("submit", pokreniUcitavanje);
     }
+    var iskljuci = document.getElementById("iskljuci");
+    if (iskljuci) {
+        iskljuci.addEventListener("click", pokreniUcitavanje);
+    }
 
     // Povratak "natrag" u pregledniku moze prikazati stranicu iz memorije,
     // s trakom koja je ostala upaljena od prosli put.
@@ -622,7 +630,10 @@ function pokreniUcitavanje() {
         var url = new URL(window.location.href);
         url.searchParams.set("lat", position.coords.latitude.toFixed(4));
         url.searchParams.set("lon", position.coords.longitude.toFixed(4));
-        url.searchParams.delete("q");
+        // Sve sto bi govorilo o drugom mjestu ili gasilo lokaciju - van.
+        ["q", "name", "tz", "tocno"].forEach(function (ime) {
+            url.searchParams.delete(ime);
+        });
         window.location.replace(url.toString());
     }
 
@@ -640,8 +651,9 @@ function pokreniUcitavanje() {
     gumb.addEventListener("click", trazi);
 
     // Smije li se lokacija dohvatiti sama od sebe (uz vec dano dopustenje)?
-    // Ne kad je mjesto zapamceno - covjek ga je sam trazio, pa ga GPS ne
-    // smije pregaziti bez pitanja. Tada gumb samo stoji.
+    // Posluzitelj to odlucuje iz kolacica: da kad je covjek tocnu lokaciju
+    // ukljucio, ne kad ju je iskljucio ili sam upisao grad. Inace gumb
+    // samo stoji.
     var automatski = {% if auto_lokacija %}true{% else %}false{% endif %};
 
     if (!automatski) {

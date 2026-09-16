@@ -580,6 +580,27 @@ class RememberedLocationTests(SimpleTestCase):
             with self.subTest(kolacic=smece):
                 self.assertIsNone(geocode.from_cookie(smece))
 
+    def test_kolacic_nosi_i_zelju_oko_tocne_lokacije(self):
+        grad = Location("Madrid", "ES", 40.4168, -3.7038, timezone="Europe/Madrid")
+
+        # Grad i zelja zajedno - oboje prezivi.
+        oba = geocode.to_cookie(grad, gps=geocode.GPS_ON)
+        self.assertEqual(geocode.from_cookie(oba).name, "Madrid")
+        self.assertEqual(geocode.gps_from_cookie(oba), geocode.GPS_ON)
+
+        # Samo zelja, bez grada: grad je None, zelja ostaje.
+        samo = geocode.to_cookie(gps=geocode.GPS_OFF)
+        self.assertIsNone(geocode.from_cookie(samo))
+        self.assertEqual(geocode.gps_from_cookie(samo), geocode.GPS_OFF)
+
+        # Samo grad: zelje nema.
+        self.assertIsNone(geocode.gps_from_cookie(geocode.to_cookie(grad)))
+
+        # Smece u polju se zanemari kao i sve ostalo iz kolacica.
+        for smece in (None, "", "nije json", '{"gps":"mozda"}', '{"gps":1}', "[1]"):
+            with self.subTest(kolacic=smece):
+                self.assertIsNone(geocode.gps_from_cookie(smece))
+
     def test_zapamceno_ide_prije_ipa_a_poslije_upisanog(self):
         zapamceno = Location("Rijeka", "", 45.33, 14.44, source=geocode.BY_REMEMBERED)
 
@@ -644,13 +665,80 @@ class RememberCookieViewTests(SimpleTestCase):
         # Nista novo se ne postavlja niti brise.
         self.assertNotIn(geocode.COOKIE_NAME, response.cookies)
 
-    def test_tocna_lokacija_brise_zapamceno(self):
-        # GPS bez imena = "gdje jesam", a to se mijenja - kolacic se brise.
-        response = self._get("/prognoze/?lat=45.0&lon=14.0")
+    def test_tocna_lokacija_se_ukljuci_a_grad_ostane(self):
+        # GPS = "gdje jesam", a to se mijenja: pamti se zelja, ne koordinate.
+        # Zapamcen grad ostaje ispod, da se ima kamo vratiti.
+        madrid = geocode.to_cookie(Location("Madrid", "ES", 40.42, -3.70))
+        response = self._get(
+            "/prognoze/?lat=45.0&lon=14.0", cookies={geocode.COOKIE_NAME: madrid}
+        )
         kolacic = response.cookies.get(geocode.COOKIE_NAME)
 
-        self.assertIsNotNone(kolacic)
-        self.assertEqual(kolacic["max-age"], 0)
+        self.assertEqual(geocode.gps_from_cookie(kolacic.value), geocode.GPS_ON)
+        self.assertEqual(geocode.from_cookie(kolacic.value).name, "Madrid")
+        self.assertEqual(kolacic["max-age"], geocode.COOKIE_MAX_AGE)
+
+        html = response.content.decode()
+        # Dok je ukljucena, nudi se gasenje - a ne jos jedno paljenje.
+        self.assertIn("Isključi točnu lokaciju", html)
+        self.assertIn('href="?tocno=ne"', html)
+        self.assertNotIn('id="tocnije"', html)
+
+    def test_iskljucivanje_vraca_zapamceni_grad_i_gasi_automatiku(self):
+        ukljuceno = geocode.to_cookie(
+            Location("Madrid", "ES", 40.42, -3.70), gps=geocode.GPS_ON
+        )
+        response = self._get(
+            "/prognoze/?tocno=ne", cookies={geocode.COOKIE_NAME: ukljuceno}
+        )
+        kolacic = response.cookies.get(geocode.COOKIE_NAME)
+        html = response.content.decode()
+
+        self.assertContains(response, "Madrid")
+        self.assertContains(response, "zapamćeno")
+        self.assertEqual(geocode.gps_from_cookie(kolacic.value), geocode.GPS_OFF)
+        self.assertEqual(geocode.from_cookie(kolacic.value).name, "Madrid")
+        # Gumb za paljenje je opet tu, ali se nista ne dohvaca samo od sebe.
+        self.assertIn('id="tocnije"', html)
+        self.assertIn("var automatski = false;", html)
+
+    def test_iskljuceno_bez_grada_ostaje_na_ipu_bez_automatike(self):
+        # Iskljucena bez zapamcenog grada: inace bi se sljedeci posjet opet
+        # sam dohvatio, i ne bi se dala iskljuciti.
+        response = self._get("/prognoze/?tocno=ne")
+        kolacic = response.cookies.get(geocode.COOKIE_NAME)
+        html = response.content.decode()
+
+        self.assertEqual(geocode.gps_from_cookie(kolacic.value), geocode.GPS_OFF)
+        self.assertIsNone(geocode.from_cookie(kolacic.value))
+        self.assertIn('id="tocnije"', html)
+        self.assertIn("var automatski = false;", html)
+
+        # I na sljedecem posjetu bez parametara ostaje iskljucena.
+        opet = self._get("/prognoze/", cookies={geocode.COOKIE_NAME: kolacic.value})
+        self.assertIn("var automatski = false;", opet.content.decode())
+
+    def test_ukljucena_se_dohvaca_sama_i_preko_zapamcenog(self):
+        ukljuceno = geocode.to_cookie(
+            Location("Madrid", "ES", 40.42, -3.70), gps=geocode.GPS_ON
+        )
+        response = self._get("/prognoze/", cookies={geocode.COOKIE_NAME: ukljuceno})
+        self.assertIn("var automatski = true;", response.content.decode())
+
+    def test_upisan_grad_gasi_tocnu_lokaciju_ali_gumb_ostaje(self):
+        ukljuceno = geocode.to_cookie(gps=geocode.GPS_ON)
+        response = self._get(
+            "/prognoze/?q=Split", cookies={geocode.COOKIE_NAME: ukljuceno}
+        )
+        kolacic = response.cookies.get(geocode.COOKIE_NAME)
+        html = response.content.decode()
+
+        # Zadnji izricit izbor pobjeduje: grad se pamti, zelja pada.
+        self.assertEqual(geocode.from_cookie(kolacic.value).name, "Split")
+        self.assertIsNone(geocode.gps_from_cookie(kolacic.value))
+        # Ali se uvijek moze natrag na "gdje jesam".
+        self.assertIn('id="tocnije"', html)
+        self.assertIn("var automatski = false;", html)
 
     def test_zapamceno_ne_pokrece_gps_samo_od_sebe(self):
         kolacic = geocode.to_cookie(Location("Rijeka", "", 45.33, 14.44))

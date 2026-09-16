@@ -43,6 +43,18 @@ def client_ip(request):
 def op(request):
     query = request.GET.get("q", "")
 
+    # Sto preglednik pamti: zadnji grad koji je covjek sam trazio, i je li
+    # tocna lokacija ukljucena ili iskljucena. Oboje zivi u istom kolacicu.
+    cookie = request.COOKIES.get(geocode.COOKIE_NAME)
+    remembered = geocode.from_cookie(cookie)
+    gps = geocode.gps_from_cookie(cookie)
+    # Veza "Iskljuci tocnu lokaciju". Vrijedi vec za ovaj zahtjev, ne tek
+    # od kolacica koji ce se sad zapisati - inace bi se bas ova stranica
+    # jos jednom sama dohvatila.
+    turn_off = request.GET.get("tocno") == "ne"
+    if turn_off:
+        gps = geocode.GPS_OFF
+
     location = geocode.resolve(
         query=query,
         latitude=request.GET.get("lat"),
@@ -50,10 +62,10 @@ def op(request):
         # Ime i zona stizu samo kad je grad odabran iz prijedloga.
         name=request.GET.get("name"),
         tz=request.GET.get("tz"),
-        # Zadnje mjesto koje je covjek sam trazio, ako ga preglednik pamti.
-        remembered=geocode.from_cookie(request.COOKIES.get(geocode.COOKIE_NAME)),
+        remembered=remembered,
         ip=client_ip(request),
     )
+    precise = location.source == geocode.BY_PRECISE
 
     # Zrak je zaseban API, pa ide usporedo s prognozom umjesto da ceka red.
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -75,35 +87,51 @@ def op(request):
             # Granice raspona za suncanje - da tekst i kod ne razilaze.
             "tan_min": aggregate.TAN_MIN_UV,
             "tan_max": aggregate.TAN_MAX_UV,
-            # Gumb za tocnu lokaciju se nudi kad mjesto nije upisano ni
-            # dobiveno iz koordinata - dakle i kad je zapamceno.
-            "moze_tocnije": location.source in (
-                geocode.BY_IP, geocode.BY_DEFAULT, geocode.BY_REMEMBERED
-            ),
-            # Ali se lokacija sama od sebe dohvaca (uz vec dano dopustenje)
-            # samo kad nema niceg boljeg. Zapamceno mjesto je bolje: covjek
-            # ga je sam izabrao, pa ga GPS ne smije pregaziti bez pitanja.
-            "auto_lokacija": location.source in (
-                geocode.BY_IP, geocode.BY_DEFAULT
+            # Prekidac za tocnu lokaciju je uvijek tu: dok je ukljucena,
+            # veza koja je gasi; inace gumb koji je pali - i kad je grad
+            # upisan, da se uvijek moze vratiti na "gdje jesam".
+            "tocno_ukljuceno": precise,
+            "moze_tocnije": not precise,
+            # Smije li se lokacija dohvatiti sama od sebe (uz vec dano
+            # dopustenje)? Da ako je covjek ukljucio tocnu lokaciju; ne ako
+            # ju je iskljucio; inace samo kad nema niceg boljeg - zapamcen
+            # grad je bolji, covjek ga je sam izabrao, pa ga GPS ne smije
+            # pregaziti bez pitanja.
+            "auto_lokacija": (
+                (gps == geocode.GPS_ON and location.source == geocode.BY_REMEMBERED)
+                or (
+                    gps != geocode.GPS_OFF
+                    and location.source in (geocode.BY_IP, geocode.BY_DEFAULT)
+                )
             ),
             # Ako bas nijedan izvor nije prosao, reci to umjesto praznih polja.
             "nema_podataka": data.used_sources == 0,
         },
     )
 
-    # Sto se pamti za sljedeci put:
-    #  - upisan ili odabran grad se pamti - to je izricita zelja;
-    #  - tocna lokacija iz preglednika brise zapamceno: covjek je rekao
-    #    "gdje jesam", a to se mijenja, pa se ne smije prikovati.
+    # Sto se pamti za sljedeci put - zadnji izricit izbor pobjeduje:
+    #  - upisan ili odabran grad se pamti, a tocna lokacija time gasi;
+    #  - ukljucena tocna lokacija se pamti kao zelja, ne kao koordinate:
+    #    "gdje jesam" se mijenja, pa se svaki put dohvaca iznova. Grad
+    #    ispod ostaje, da se ima kamo vratiti kad se iskljuci;
+    #  - iskljucena se pamti isto tako, inace bi se sljedeci posjet opet
+    #    sam dohvatio i ne bi se dala iskljuciti.
     if location.source == geocode.BY_QUERY:
+        remember = geocode.to_cookie(location)
+    elif precise:
+        remember = geocode.to_cookie(remembered, gps=geocode.GPS_ON)
+    elif turn_off:
+        remember = geocode.to_cookie(remembered, gps=geocode.GPS_OFF)
+    else:
+        remember = None
+
+    if remember is not None:
         response.set_cookie(
             geocode.COOKIE_NAME,
-            geocode.to_cookie(location),
+            remember,
             max_age=geocode.COOKIE_MAX_AGE,
             samesite="Lax",
             httponly=True,
         )
-    elif location.source == geocode.BY_PRECISE:
-        response.delete_cookie(geocode.COOKIE_NAME, samesite="Lax")
 
     return response

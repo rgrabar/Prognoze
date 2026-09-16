@@ -259,13 +259,19 @@ body {
     font-style: italic;
 }
 
+/* Prekidac za tocnu lokaciju: gumb dok je iskljucena, veza dok je
+   ukljucena. Oboje izgleda isto - covjeku je to jedan prekidac. */
 .tocnije {
+    display: inline-block;
     padding: 5px 12px;
+    font: inherit;
     font-size: 13px;
+    line-height: normal;
     border: 1px solid var(--linija);
     border-radius: 999px;
     background: var(--pozadina);
     color: var(--tekst);
+    text-decoration: none;
     cursor: pointer;
 }
 

@@ -53,6 +53,13 @@ BY_DEFAULT = "zadano"
 COOKIE_NAME = "prognoze_mjesto"
 COOKIE_MAX_AGE = 365 * 24 * 3600
 
+# Sto covjek zeli s tocnom lokacijom - pamti se u istom kolacicu, uz grad:
+#  - "da": ukljucena, dohvaca se sama na svakom posjetu (uz dopustenje);
+#  - "ne": iskljucena, nikad sama od sebe - i kad grad nije zapamcen;
+#  - bez oznake: samo ako nista nije zapamceno (prvi posjet).
+GPS_ON = "da"
+GPS_OFF = "ne"
+
 
 @dataclass
 class Location:
@@ -332,24 +339,39 @@ def _coordinates(latitude, longitude):
     return lat, lon
 
 
-def to_cookie(location):
-    """Location -> tekst za kolacic.
+def to_cookie(location=None, gps=None):
+    """Zapamcen grad i/ili zelja oko tocne lokacije -> tekst za kolacic.
 
     JSON s `ensure_ascii`, jer kolacici smiju nositi samo ASCII - "Čakovec"
-    bi inace mogao proci kroz neki preglednik krivo. Sprema se dovoljno da
-    se stranica prikaze bez ijednog upita: ime, drzava, koordinate i zona.
+    bi inace mogao proci kroz neki preglednik krivo. Za grad se sprema
+    dovoljno da se stranica prikaze bez ijednog upita: ime, drzava,
+    koordinate i zona. Oba dijela su neobavezna: tocna lokacija se moze
+    ukljuciti i bez zapamcenog grada, a grad zapamtiti bez ikakve zelje.
     """
-    return json.dumps(
-        {
-            "n": location.name,
-            "c": location.country,
-            "lat": round(location.latitude, 4),
-            "lon": round(location.longitude, 4),
-            "tz": location.timezone,
-        },
-        ensure_ascii=True,
-        separators=(",", ":"),
-    )
+    data = {}
+    if location is not None:
+        data.update(
+            n=location.name,
+            c=location.country,
+            lat=round(location.latitude, 4),
+            lon=round(location.longitude, 4),
+            tz=location.timezone,
+        )
+    if gps in (GPS_ON, GPS_OFF):
+        data["gps"] = gps
+    return json.dumps(data, ensure_ascii=True, separators=(",", ":"))
+
+
+def gps_from_cookie(value):
+    """Zelja oko tocne lokacije iz kolacica: GPS_ON, GPS_OFF ili None."""
+    if not value:
+        return None
+    try:
+        data = json.loads(value)
+        gps = data.get("gps")
+    except (ValueError, TypeError, AttributeError):
+        return None
+    return gps if gps in (GPS_ON, GPS_OFF) else None
 
 
 def from_cookie(value):
