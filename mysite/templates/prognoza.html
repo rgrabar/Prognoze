@@ -343,6 +343,13 @@ function pokreniUcitavanje() {
     }
 }
 
+function zaustaviUcitavanje() {
+    var traka = document.getElementById("ucitavanje");
+    if (traka) {
+        traka.hidden = true;
+    }
+}
+
 (function () {
     var forma = document.getElementById("trazilica");
     if (forma) {
@@ -355,12 +362,7 @@ function pokreniUcitavanje() {
 
     // Povratak "natrag" u pregledniku moze prikazati stranicu iz memorije,
     // s trakom koja je ostala upaljena od prosli put.
-    window.addEventListener("pageshow", function () {
-        var traka = document.getElementById("ucitavanje");
-        if (traka) {
-            traka.hidden = true;
-        }
-    });
+    window.addEventListener("pageshow", zaustaviUcitavanje);
 })();
 </script>
 
@@ -637,37 +639,52 @@ function pokreniUcitavanje() {
         window.location.replace(url.toString());
     }
 
-    function trazi() {
+    // Dok se trazi, to se i vidi: gumb kaze "Tražim..." i traka ide.
+    // Inace stranica izgleda gotova, a za koju sekundu se sama zamijeni -
+    // sto zbunjuje bas kad se dohvaca samo od sebe.
+    function trazi(nakonNeuspjeha) {
+        gumb.hidden = false;
         gumb.disabled = true;
         gumb.textContent = "Tražim...";
         pokreniUcitavanje();
         navigator.geolocation.getCurrentPosition(otvori, function (error) {
+            zaustaviUcitavanje();
             gumb.disabled = false;
-            gumb.textContent = "Nije uspjelo, probaj opet";
+            gumb.textContent = nakonNeuspjeha;
             console.warn("Geolokacija odbijena ili nedostupna:", error.message);
         }, { timeout: 10000, maximumAge: 600000 });
     }
 
-    gumb.addEventListener("click", trazi);
+    gumb.addEventListener("click", function () {
+        trazi("Nije uspjelo, probaj opet");
+    });
 
-    // Smije li se lokacija dohvatiti sama od sebe (uz vec dano dopustenje)?
-    // Posluzitelj to odlucuje iz kolacica: da kad je covjek tocnu lokaciju
-    // ukljucio, ne kad ju je iskljucio ili sam upisao grad. Inace gumb
-    // samo stoji.
+    // Posluzitelj iz kolacica odlucuje sto se smije samo od sebe:
+    //  - ukljucena: covjek ju je sam upalio, pa se trazi odmah - i uz
+    //    pitanje preglednika, ako ga on postavlja svaki put (Safari na
+    //    iPhoneu pamti "dopusti" samo kratko). Na to je pristao kad ju je
+    //    ukljucio; ako odbije, ostaje obican gumb, a veza "Isključi" je
+    //    tu ako vise ne zeli.
+    //  - automatski: prvi posjet, nista zapamceno - dohvati bez pitanja
+    //    samo ako je dopustenje vec dano; prozorcic ne otvaramo sami.
+    //  - inace gumb samo stoji.
+    var ukljucena = {% if tocno_zeljeno %}true{% else %}false{% endif %};
     var automatski = {% if auto_lokacija %}true{% else %}false{% endif %};
+
+    if (ukljucena) {
+        trazi("Točna lokacija");
+        return;
+    }
 
     if (!automatski) {
         gumb.hidden = false;
         return;
     }
 
-    // Ako je dopustenje vec dano, ucini to bez pitanja i bez gumba.
     if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: "geolocation" }).then(function (status) {
             if (status.state === "granted") {
-                navigator.geolocation.getCurrentPosition(otvori, function () {
-                    gumb.hidden = false;
-                });
+                trazi("Točna lokacija");
             } else if (status.state === "prompt") {
                 gumb.hidden = false;
             }

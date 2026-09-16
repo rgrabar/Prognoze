@@ -67,6 +67,18 @@ def op(request):
     )
     precise = location.source == geocode.BY_PRECISE
 
+    # Smije li se lokacija dohvatiti sama od sebe (uz vec dano dopustenje)?
+    # Da ako je covjek ukljucio tocnu lokaciju; ne ako ju je iskljucio;
+    # inace samo kad nema niceg boljeg - zapamcen grad je bolji, covjek ga
+    # je sam izabrao, pa ga GPS ne smije pregaziti bez pitanja.
+    auto_locate = (
+        (gps == geocode.GPS_ON and location.source == geocode.BY_REMEMBERED)
+        or (
+            gps != geocode.GPS_OFF
+            and location.source in (geocode.BY_IP, geocode.BY_DEFAULT)
+        )
+    )
+
     # Zrak je zaseban API, pa ide usporedo s prognozom umjesto da ceka red.
     with ThreadPoolExecutor(max_workers=2) as pool:
         forecasts_task = pool.submit(providers.collect, location)
@@ -92,18 +104,12 @@ def op(request):
             # upisan, da se uvijek moze vratiti na "gdje jesam".
             "tocno_ukljuceno": precise,
             "moze_tocnije": not precise,
-            # Smije li se lokacija dohvatiti sama od sebe (uz vec dano
-            # dopustenje)? Da ako je covjek ukljucio tocnu lokaciju; ne ako
-            # ju je iskljucio; inace samo kad nema niceg boljeg - zapamcen
-            # grad je bolji, covjek ga je sam izabrao, pa ga GPS ne smije
-            # pregaziti bez pitanja.
-            "auto_lokacija": (
-                (gps == geocode.GPS_ON and location.source == geocode.BY_REMEMBERED)
-                or (
-                    gps != geocode.GPS_OFF
-                    and location.source in (geocode.BY_IP, geocode.BY_DEFAULT)
-                )
-            ),
+            "auto_lokacija": auto_locate,
+            # Je li ju covjek sam ukljucio? Onda se trazi odmah, i uz
+            # pitanje preglednika ako ga on postavlja svaki put (Safari na
+            # iPhoneu) - to je pristao kad ju je ukljucio. Ne na stranici
+            # upisanog grada: tamo je upravo rekao da hoce taj grad.
+            "tocno_zeljeno": gps == geocode.GPS_ON and auto_locate,
             # Ako bas nijedan izvor nije prosao, reci to umjesto praznih polja.
             "nema_podataka": data.used_sources == 0,
         },

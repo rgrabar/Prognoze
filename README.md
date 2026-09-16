@@ -142,15 +142,26 @@ grada pa preusmjeravanja.
 stoji gumb "Tocna lokacija", dok je ukljucena veza "Iskljuci tocnu
 lokaciju". Isti kolacic uz grad nosi i tu zelju (`gps`: `da` ili `ne`):
 
-* **Ukljucena** (`da`): lokacija se na svakom posjetu dohvaca sama od sebe,
-  uz vec dano dopustenje preglednika. Pamti se zelja, a ne koordinate -
-  "gdje jesam" se mijenja. Zapamcen grad ostaje ispod, da se ima kamo
-  vratiti.
+* **Ukljucena** (`da`): lokacija se na svakom posjetu trazi odmah, i uz
+  pitanje preglednika ako ga on postavlja svaki put - na to je covjek
+  pristao kad ju je ukljucio. Dok se trazi, gumb kaze "Tražim..." i traka
+  ide, da stranica ne izgleda gotova pa se za koju sekundu sama zamijeni.
+  Pamti se zelja, a ne koordinate - "gdje jesam" se mijenja. Zapamcen grad
+  ostaje ispod, da se ima kamo vratiti.
 * **Iskljucena** (`ne`): nikad sama od sebe, ni kad grad nije zapamcen.
   Bez toga bi se sljedeci posjet opet sam dohvatio, i ne bi se dala
   iskljuciti. Veza vodi na `?tocno=ne`, sto vrijedi vec za tu stranicu.
 * **Bez oznake** (prvi posjet): sama od sebe samo kad nista nije
-  zapamceno; zapamcen grad pobjeduje, jer ga je covjek sam izabrao.
+  zapamceno, i samo ako je dopustenje vec dano - prozorcic se ne otvara
+  sam od sebe nekome tko nista nije trazio. Zapamcen grad pobjeduje, jer
+  ga je covjek sam izabrao.
+
+Safari na iPhoneu (i web-aplikacija s pocetnog zaslona) po zadanom za
+lokaciju **pita svaki put** - "dopusti" pamti samo kratko, za razliku od
+Chromea na Androidu. Zato se ukljucena trazi bez obzira na stanje
+dopustenja: iPhone onda pita jednim dodirom umjesto da se gumb trazi
+rucno. Tko pitanje ne zeli, u Safariju postavi lokaciju za ovu stranicu na
+"Dopusti" (aA u adresnoj traci -> Postavke web-mjesta -> Lokacija).
 
 **Zadnji izricit izbor pobjeduje.** Upisan ili odabran grad se pamti, a
 tocna lokacija se time gasi - ali gumb ostaje, pa se uvijek moze natrag na

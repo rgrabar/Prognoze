@@ -723,7 +723,17 @@ class RememberCookieViewTests(SimpleTestCase):
             Location("Madrid", "ES", 40.42, -3.70), gps=geocode.GPS_ON
         )
         response = self._get("/prognoze/", cookies={geocode.COOKIE_NAME: ukljuceno})
-        self.assertIn("var automatski = true;", response.content.decode())
+        html = response.content.decode()
+
+        self.assertIn("var automatski = true;", html)
+        # Ukljucena se trazi odmah, i uz pitanje preglednika.
+        self.assertIn("var ukljucena = true;", html)
+
+    def test_prvi_posjet_ne_otvara_pitanje_sam_od_sebe(self):
+        # Bez kolacica smije samo uz vec dano dopustenje - nije "ukljucena".
+        html = self._get("/prognoze/").content.decode()
+        self.assertIn("var automatski = true;", html)
+        self.assertIn("var ukljucena = false;", html)
 
     def test_upisan_grad_gasi_tocnu_lokaciju_ali_gumb_ostaje(self):
         ukljuceno = geocode.to_cookie(gps=geocode.GPS_ON)
@@ -739,6 +749,9 @@ class RememberCookieViewTests(SimpleTestCase):
         # Ali se uvijek moze natrag na "gdje jesam".
         self.assertIn('id="tocnije"', html)
         self.assertIn("var automatski = false;", html)
+        # I nista se ne trazi samo od sebe na stranici upisanog grada, iako
+        # je u dolaznom kolacicu jos pisalo "ukljucena".
+        self.assertIn("var ukljucena = false;", html)
 
     def test_zapamceno_ne_pokrece_gps_samo_od_sebe(self):
         kolacic = geocode.to_cookie(Location("Rijeka", "", 45.33, 14.44))
