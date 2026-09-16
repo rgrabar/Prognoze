@@ -54,6 +54,14 @@ UV_WINDOW_FALLBACK = (6, 21)
 # na manje izvora. Sesti dan bi ostao na cetiri-pet modela.
 FORECAST_DAYS = 5
 
+# Dijelovi dana u kratkoj prognozi: jutro i popodne, svaki sa svojom
+# slikicom. Vecer i noc nisu tu - dan se planira oko ovih sati, a ostatak
+# pokriva traka po satima. Granice su lokalni sati [od, do).
+DAY_PARTS = (
+    ("ujutro", 6, 12),
+    ("popodne", 12, 18),
+)
+
 # Stanja koja se broje kao dogadaj: dovoljan je jedan sat da obiljeze dan.
 # Naoblaka nije medu njima - jedan oblacan sat ne cini dan oblacnim, dok
 # jedan sat kise itekako znaci da ce padati.
@@ -222,6 +230,58 @@ class AggregatedHour:
 
 
 @dataclass
+class DayPart:
+    """Jutro ili popodne jednog dana: slikica i, ako pada, kolika je sansa."""
+
+    label: str
+    condition: Optional[Condition] = None
+    # Najveca satna vjerojatnost oborine u tom dijelu dana. "Najveca", ne
+    # prosjek: pljusak od tri sata na 80% unutar sest sati je 80% sanse da
+    # pokisnes, a ne 40%. Ispisuje se samo kad slikica pokazuje oborinu -
+    # broj na plocici tako sam po sebi znaci "pada, i evo koliko sigurno".
+    precip_prob: Optional[float] = None
+
+    @property
+    def icon(self):
+        return icon_for(self.condition)
+
+    @property
+    def condition_label(self):
+        return label_for(self.condition)
+
+    @property
+    def is_wet(self):
+        return self.condition in PRECIPITATION
+
+    @property
+    def prob_label(self):
+        """'70%' kad pada i sansa je poznata, inace prazno."""
+        if self.is_wet and self.precip_prob is not None:
+            return "{0}%".format(int(round(self.precip_prob)))
+        return ""
+
+    @property
+    def title(self):
+        text = "{0} {1}".format(self.label, self.condition_label)
+        if self.prob_label:
+            text += " " + self.prob_label
+        return text
+
+
+def day_part(label, hours):
+    """Sazetak dijela dana iz njegovih sati - istim pravilom kao cijeli dan."""
+    probs = [
+        h.precip_prob for h in hours
+        if h.precip_prob is not None and h.condition in PRECIPITATION
+    ]
+    return DayPart(
+        label=label,
+        condition=day_condition(hours),
+        precip_prob=max(probs) if probs else None,
+    )
+
+
+@dataclass
 class DayForecast:
     """Jedan dan u kratkoj prognozi sa strane."""
 
@@ -238,6 +298,9 @@ class DayForecast:
     precip_mm: Optional[float] = None
     # Svih 24 sata - sklopljena traka po satima ih prikazuje.
     hours: List[AggregatedHour] = field(default_factory=list)
+    # Jutro i popodne, svaki sa svojom slikicom - plocica ih pokazuje
+    # umjesto jedne slikice za cijeli dan.
+    parts: List[DayPart] = field(default_factory=list)
 
     @property
     def strip_id(self):
@@ -264,7 +327,10 @@ class DayForecast:
 
     @property
     def title(self):
-        parts = [self.label, self.condition_label]
+        parts = [self.label]
+        parts.extend(p.title for p in self.parts if p.condition is not None)
+        if not self.parts:
+            parts.append(self.condition_label)
         if self.min_c is not None and self.max_c is not None:
             parts.append("{0} do {1} C".format(self.min_c, self.max_c))
         if self.precip_hours:
@@ -663,6 +729,10 @@ def build(location, forecasts, now_utc=None):
                 ),
                 precip_mm=rounded(sum(mm)) if mm else None,
                 hours=hours,
+                parts=[
+                    day_part(label, hours[start:end])
+                    for label, start, end in DAY_PARTS
+                ],
             )
         )
 

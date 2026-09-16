@@ -99,6 +99,8 @@ def op(request):
             # Granice raspona za suncanje - da tekst i kod ne razilaze.
             "tan_min": aggregate.TAN_MIN_UV,
             "tan_max": aggregate.TAN_MAX_UV,
+            # Nazivi dijelova dana za zaglavlje popisa na uskom zaslonu.
+            "dijelovi_dana": aggregate.DAY_PARTS,
             # Prekidac za tocnu lokaciju je uvijek tu: dok je ukljucena,
             # veza koja je gasi; inace gumb koji je pali - i kad je grad
             # upisan, da se uvijek moze vratiti na "gdje jesam".

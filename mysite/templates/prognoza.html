@@ -273,12 +273,28 @@
         <div class="karta">
             <h2 class="naslov">Sljedeći dani</h2>
 
+            {% comment %}
+                Svaki dan: ime, jutro i popodne sa svojom slikicom (i postotkom
+                kad pada), pa najvisa i najniza. Isti HTML je na sirokom
+                zaslonu plocica, a na uskom redak - razlika je samo u CSS-u.
+            {% endcomment %}
             <div class="dani">
+                <div class="dani-zaglavlje" aria-hidden="true">
+                    <span></span>
+                    {% for oznaka, od, do in dijelovi_dana %}<span>{{ oznaka }}</span>{% endfor %}
+                    <span></span>
+                </div>
                 {% for dan in prognoza.days %}
                     <div class="dan" title="{{ dan.title }}">
                         <span class="dan-ime">{{ dan.label }}</span>
-                        <img src="{% static dan.icon %}"
-                             alt="{{ dan.condition_label }}" loading="lazy">
+                        {% for dio in dan.parts %}
+                            <span class="dan-dio">
+                                <span class="dan-dio-ime">{{ dio.label }}</span>
+                                <img src="{% static dio.icon %}"
+                                     alt="{{ dio.condition_label }}" loading="lazy">
+                                <span class="dan-posto">{{ dio.prob_label }}</span>
+                            </span>
+                        {% endfor %}
                         <span class="dan-temp">
                             {{ dan.max_c|default_if_none:"?" }}&deg;
                             <span class="sitno">{{ dan.min_c|default_if_none:"?" }}&deg;</span>

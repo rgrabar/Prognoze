@@ -1098,6 +1098,50 @@ class VoteTests(SimpleTestCase):
         self.assertIsNone(aggregate.vote([]))
 
 
+class DayPartTests(SimpleTestCase):
+    """Jutro i popodne: slikica po istom pravilu kao dan, i sansa kise."""
+
+    def _hour(self, condition, prob=None):
+        return aggregate.AggregatedHour(
+            hour=0, label="", condition=condition, precip_prob=prob, sources=1
+        )
+
+    def test_kisa_u_jednom_satu_obiljezi_dio_dana(self):
+        hours = [self._hour(Condition.CLEAR, 5)] * 5 + [self._hour(Condition.RAIN, 70)]
+        dio = aggregate.day_part("ujutro", hours)
+
+        self.assertEqual(dio.condition, Condition.RAIN)
+        self.assertTrue(dio.is_wet)
+        self.assertEqual(dio.prob_label, "70%")
+        self.assertEqual(dio.title, "ujutro kiša 70%")
+
+    def test_sansa_je_najveca_satna_a_ne_prosjek(self):
+        # Pljusak od tri sata na 80% unutar sest sati je 80% sanse da
+        # pokisnes, a ne 40%.
+        hours = [self._hour(Condition.RAIN, 80)] * 3 + [self._hour(Condition.CLEAR, 5)] * 3
+        self.assertEqual(aggregate.day_part("popodne", hours).prob_label, "80%")
+
+    def test_suh_dio_dana_nema_postotka(self):
+        # I kad izvori daju 30% - bez slikice oborine broj bi zbunjivao.
+        hours = [self._hour(Condition.OVERCAST, 30)] * 6
+        dio = aggregate.day_part("ujutro", hours)
+
+        self.assertEqual(dio.condition, Condition.OVERCAST)
+        self.assertFalse(dio.is_wet)
+        self.assertEqual(dio.prob_label, "")
+        self.assertEqual(dio.title, "ujutro oblačno")
+
+    def test_kisa_bez_poznate_sanse_nema_postotka(self):
+        dio = aggregate.day_part("ujutro", [self._hour(Condition.RAIN)])
+        self.assertTrue(dio.is_wet)
+        self.assertEqual(dio.prob_label, "")
+
+    def test_prazan_dio_dana(self):
+        dio = aggregate.day_part("ujutro", [])
+        self.assertIsNone(dio.condition)
+        self.assertEqual(dio.icon, "neznamovrime.png")
+
+
 class DayConditionTests(SimpleTestCase):
     """Koje stanje najbolje opisuje cijeli dan."""
 
@@ -1595,6 +1639,35 @@ class AggregateBuildTests(SimpleTestCase):
         self.assertFalse(any(h.is_now for h in sutra))
         self.assertFalse(any(h.is_past for h in sutra))
         self.assertTrue(all(h.condition == Condition.RAIN for h in sutra))
+
+    def test_svaki_dan_ima_jutro_i_popodne_iz_svojih_sati(self):
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        # Sutra (2026-09-03 lokalno, +2): kisa od 8 do 10 ujutro, vedro popodne.
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            moment = zadnji + timedelta(hours=i)
+            local_hour = (moment.hour + 2) % 24
+            kisa = 8 <= local_hour < 10
+            forecast.hours.append(
+                HourPoint(
+                    time=moment,
+                    temp_c=15.0,
+                    condition=Condition.RAIN if kisa else Condition.CLEAR,
+                    precip_prob=75 if kisa else 5,
+                )
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+        sutra = result.days[0]
+
+        self.assertEqual([p.label for p in sutra.parts], ["ujutro", "popodne"])
+        jutro, popodne = sutra.parts
+        self.assertEqual(jutro.condition, Condition.RAIN)
+        self.assertEqual(jutro.prob_label, "75%")
+        self.assertEqual(popodne.condition, Condition.CLEAR)
+        self.assertEqual(popodne.prob_label, "")
+        # Dijelovi su u opisu plocice.
+        self.assertIn("ujutro kiša 75%", sutra.title)
+        self.assertIn("popodne vedro", sutra.title)
 
     def test_svaki_dan_ima_puno_ime_i_vlastitu_traku(self):
         # 2026-09-02 je srijeda; sutra je cetvrtak, pa petak...

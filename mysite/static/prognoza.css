@@ -659,38 +659,79 @@ body {
 
 /* --- sljedeci dani --- */
 
-/* Pet dana jedan uz drugoga, svaki kao stupac: ime, slikica, temperature.
-   Na uskom zaslonu stanu i dalje - pet stupaca po ~55 px. */
+/* Pet dana jedan uz drugoga, svaki kao plocica: ime, pa jutro i popodne
+   jedno uz drugo sa svojom slikicom, pa temperature. Isti HTML na uskom
+   zaslonu postaje popis redaka - vidi @media nize. */
 .dani {
     display: grid;
     /* minmax(0, 1fr), ne samo 1fr: `1fr` se ne moze stisnuti ispod sirine
-       sadrzaja, pa bi na uskom zaslonu stupci prerasli karticu i stranica
-       bi se pomicala vodoravno. */
+       sadrzaja, pa bi stupci prerasli karticu i stranica bi se pomicala
+       vodoravno. */
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     margin-top: 10px;
 }
 
+/* Zaglavlje "ujutro / popodne" treba samo popisu na uskom zaslonu. */
+.dani-zaglavlje {
+    display: none;
+}
+
+/* Plocica: ime gore, dva dijela u sredini jedan uz drugoga, temperature
+   dolje. Sirina od dva dijela je razlog sto na uskom zaslonu plocice
+   ne stanu - tamo postaju redci. */
 .dani .dan {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    justify-items: center;
+    row-gap: 6px;
     padding: 10px 4px;
     border-radius: 10px;
     background: var(--sat-plava);
     text-align: center;
 }
 
-.dani .dan img {
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
+/* Ime i temperature preko oba stupca; dva dijela dana sama popune red
+   izmedu njih, redom kako stoje u HTML-u (jutro pa popodne). */
+.dani .dan .dan-ime,
+.dani .dan .dan-temp {
+    grid-column: 1 / -1;
 }
 
 .dan-ime {
     font-size: 13px;
     color: var(--slabo);
+}
+
+/* Jutro i popodne: dva stupca u plocici, svaki s oznakom, slikicom i
+   mjestom za postotak. Mjesto stoji i kad je prazno, da slikice i
+   temperature u svih pet plocica budu u istoj ravnini. */
+.dan-dio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.dan-dio-ime {
+    font-size: 11px;
+    color: var(--slabo);
+}
+
+.dan-dio img {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+}
+
+/* Postotak samo kad pada - plava, kao i sve sto na stranici znaci kisu. */
+.dan-posto {
+    min-height: 15px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sat-rub-sada);
+    font-variant-numeric: tabular-nums;
 }
 
 /* Najvisa i najniza jedna do druge; kad stupac postane preuzak,
@@ -724,19 +765,63 @@ body {
     }
 }
 
-/* Na mobitelu pet stupaca dijeli ~300 px: uzi razmaci i malo sitnije
-   brojke, da i "-10.4" stane u stupac bez prelamanja stupnja u novi red. */
-@media (max-width: 420px) {
+/* Na uskom zaslonu pet plocica s po dvije slikice ne stane u red, pa
+   dani postaju popis: u svakom retku ime, jutro, popodne, temperature.
+   Oznake "ujutro/popodne" tada stoje jednom, u zaglavlju iznad popisa. */
+@media (max-width: 640px) {
     .dani {
-        gap: 5px;
+        display: block;
     }
 
+    .dani-zaglavlje,
     .dani .dan {
-        padding: 8px 2px;
+        display: grid;
+        grid-template-columns: 52px 1fr 1fr auto;
+        align-items: center;
+        column-gap: 6px;
+        row-gap: 0;
+        padding: 7px 0;
+        border-top: 1px solid var(--linija);
+        border-radius: 0;
+        background: none;
+        text-align: left;
+        justify-items: start;
+    }
+
+    .dani-zaglavlje {
+        padding: 0 0 4px;
+        border-top: 0;
+        font-size: 11px;
+        color: var(--slabo);
+    }
+
+    .dan-dio {
+        flex-direction: row;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dan-dio img {
+        width: 26px;
+        height: 26px;
+    }
+
+    .dan-dio-ime {
+        display: none;
+    }
+
+    .dan-posto {
+        min-height: 0;
+    }
+
+    .dani .dan .dan-ime,
+    .dani .dan .dan-temp {
+        grid-column: auto;
     }
 
     .dan-temp {
         font-size: 14px;
+        justify-content: flex-end;
     }
 }
 

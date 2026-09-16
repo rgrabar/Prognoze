@@ -449,10 +449,21 @@ UV daju samo neki izvori:
 
 ## Sljedeci dani
 
-U kartici "Sljedeci dani" stoji pregled `FORECAST_DAYS` (5) dana u redu: jedna
-slikica po danu, uz najvisu i najnizu temperaturu. **Danas nije medu njima**
-- vec stoji u gornjoj kartici i u traci po satima, pa bi se samo ponavljao.
+U kartici "Sljedeci dani" stoji pregled `FORECAST_DAYS` (5) dana u redu.
+Svaki dan ima **dvije slikice - jutro (6-12) i popodne (12-18)** - uz
+najvisu i najnizu temperaturu. Vecer i noc nisu tu: dan se planira oko tih
+sati, a ostatak pokriva traka po satima. **Danas nije medu njima** - vec
+stoji u gornjoj kartici i u traci po satima, pa bi se samo ponavljao.
 Danasnji se sati i dalje racunaju, jer o njima ovise UV graf i min/max.
+
+**Postotak stoji samo pod slikicom oborine**: najveca satna vjerojatnost
+oborine u tom dijelu dana (`DayPart.precip_prob`). Najveca, ne prosjek -
+pljusak od tri sata na 80% unutar sest sati je 80% sanse da pokisnes, a ne
+40%. Suh dio dana nema broja, pa broj na plocici sam po sebi znaci "pada,
+i evo koliko sigurno". Isti HTML je na sirokom zaslonu plocica (ime gore,
+jutro i popodne jedno uz drugo, temperature dolje), a ispod 640 px redak
+u popisu s jednim zaglavljem "ujutro / popodne" - pet plocica s po dvije
+slikice u red na mobitelu ne stane.
 
 Broj dana **ne kosta dodatne pozive**: svaki je izvor jedan zahtjev po mjestu
 (i tako se kesira 10 minuta), a koliko dana vraca samo je parametar u tom
