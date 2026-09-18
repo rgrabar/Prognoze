@@ -245,28 +245,6 @@
             </div>
         {% endif %}
 
-        {% if prognoza.has_uv %}
-            <p class="suncanje">
-                {% if prognoza.tanning_label %}
-                    <strong>Najbolji sati za sunčanje:</strong>
-                    {{ prognoza.tanning_label }}
-                    <span class="sitno">
-                        &mdash; tada je UV između {{ tan_min|floatformat:0 }} i
-                        {{ tan_max|floatformat:0 }}: dovoljno da koža potamni,
-                        a još ne toliko da brzo izgori. Koliko brzo tko
-                        pocrveni ovisi o tipu kože.
-                    </span>
-                {% else %}
-                    <strong>Danas nema sati pogodnih za sunčanje.</strong>
-                    <span class="sitno">
-                        Nijedan sat nema UV između
-                        {{ tan_min|floatformat:0 }} i
-                        {{ tan_max|floatformat:0 }} &mdash; ili je preslab da
-                        koža potamni, ili prejak da bude ugodno.
-                    </span>
-                {% endif %}
-            </p>
-        {% endif %}
     </div>
 
     {% if prognoza.days %}
@@ -274,15 +252,14 @@
             <h2 class="naslov">Sljedeći dani</h2>
 
             {% comment %}
-                Svaki dan: ime, jutro i popodne sa svojom slikicom (i postotkom
-                kad pada), pa najvisa i najniza. Isti HTML je na sirokom
+                Svaki dan: ime, pa jutro i popodne - svaki sa svojom slikicom,
+                temperaturom i postotkom kad pada. Isti HTML je na sirokom
                 zaslonu plocica, a na uskom redak - razlika je samo u CSS-u.
             {% endcomment %}
             <div class="dani">
                 <div class="dani-zaglavlje" aria-hidden="true">
                     <span></span>
                     {% for oznaka, od, do in dijelovi_dana %}<span>{{ oznaka }}</span>{% endfor %}
-                    <span></span>
                 </div>
                 {% for dan in prognoza.days %}
                     <div class="dan" title="{{ dan.title }}">
@@ -292,13 +269,12 @@
                                 <span class="dan-dio-ime">{{ dio.label }}</span>
                                 <img src="{% static dio.icon %}"
                                      alt="{{ dio.condition_label }}" loading="lazy">
-                                <span class="dan-posto">{{ dio.prob_label }}</span>
+                                <span class="dan-dio-brojke">
+                                    <span class="dan-temp">{{ dio.temp_c|default_if_none:"?" }}&deg;C</span>
+                                    <span class="dan-posto">{{ dio.prob_label }}</span>
+                                </span>
                             </span>
                         {% endfor %}
-                        <span class="dan-temp">
-                            {{ dan.max_c|default_if_none:"?" }}&deg;
-                            <span class="sitno">{{ dan.min_c|default_if_none:"?" }}&deg;</span>
-                        </span>
                     </div>
                 {% endfor %}
             </div>

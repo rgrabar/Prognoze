@@ -96,9 +96,6 @@ def op(request):
             "prognoza": data,
             "zrak": quality,
             "css_v": css_version(),
-            # Granice raspona za suncanje - da tekst i kod ne razilaze.
-            "tan_min": aggregate.TAN_MIN_UV,
-            "tan_max": aggregate.TAN_MAX_UV,
             # Nazivi dijelova dana za zaglavlje popisa na uskom zaslonu.
             "dijelovi_dana": aggregate.DAY_PARTS,
             # Prekidac za tocnu lokaciju je uvijek tu: dok je ukljucena,

@@ -316,8 +316,7 @@ dalje pojavi u popisu izvora kao nedostupan, umjesto da ih sest nestane.
 Kartice su podijeljene po vremenu na koje se odnose:
 
 * **gornja kartica** - trenutno stanje (temperatura, vjetar, UV, zrak);
-* **Danas** - traka po satima, izlazak i zalazak sunca, UV graf, sati za
-  suncanje;
+* **Danas** - traka po satima, izlazak i zalazak sunca, UV graf;
 * **Sljedeci dani** - pregled pet dana i, sklopljeno, sutra po satima;
 * **Izvori** - tko je sto rekao.
 
@@ -422,18 +421,6 @@ vedro nebo nije isto sto i obicni UV.
 | 80-100 | vrlo losa |
 | 100+ | izuzetno losa |
 
-### Sati za suncanje
-
-Ispod grafa pise u kojim je satima UV izmedu `TAN_MIN_UV` (3) i
-`TAN_MAX_UV` (6): ispod 3 koza tamni vrlo sporo, iznad 6 opekline dolaze
-brzo. Na jakom ljetnom danu to samo od sebe izbaci podne i ostavi jutro i
-kasno poslijepodne.
-
-I ovdje se gleda zaokruzena vrijednost. Bez toga se razmak lomi na
-komadice kad UV oscilira oko granice - u Quitu je zbog popodnevnih oblaka
-ispadalo "09:00-10:00, 13:00-14:00 i 15:00-16:00" jer je jedan sat imao
-2.9 umjesto 3.0.
-
 UV daju samo neki izvori:
 
 * **Open-Meteo** - da, ali se trazi samo od `best_match` modela. Open-Meteo
@@ -450,9 +437,12 @@ UV daju samo neki izvori:
 ## Sljedeci dani
 
 U kartici "Sljedeci dani" stoji pregled `FORECAST_DAYS` (5) dana u redu.
-Svaki dan ima **dvije slikice - jutro (6-12) i popodne (12-18)** - uz
-najvisu i najnizu temperaturu. Vecer i noc nisu tu: dan se planira oko tih
-sati, a ostatak pokriva traka po satima. **Danas nije medu njima** - vec
+Svaki dan ima **dvije slikice - jutro (6-12) i popodne (12-18)** - svaka
+sa svojom temperaturom: prosjek satnih temperatura tog dijela dana, a ne
+dnevni minimum i maksimum (minimum obicno padne u pet ujutro, izvan
+jutra; min i max ostaju u oblacicu plocice). Vecer i noc nisu tu: dan se
+planira oko tih sati, a ostatak pokriva traka po satima. **Danas nije
+medu njima** - vec
 stoji u gornjoj kartici i u traci po satima, pa bi se samo ponavljao.
 Danasnji se sati i dalje racunaju, jer o njima ovise UV graf i min/max.
 

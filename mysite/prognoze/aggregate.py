@@ -33,13 +33,6 @@ UV_BANDS = [
 # Da graf ne izgleda prazno u zimu, ljestvica ide barem do ovoga.
 UV_MIN_SCALE = 3.0
 
-# Raspon UV-a za "najbolje sate za suncanje". Ispod 3 koza tamni jako
-# sporo, iznad 6 opekline dolaze brzo - pa ostaje sredina. Na jakom
-# ljetnom danu to samo od sebe izbaci podne i ostavi jutro i kasno
-# poslijepodne, sto se poklapa s uobicajenim savjetom.
-TAN_MIN_UV = 3.0
-TAN_MAX_UV = 6.0
-
 # Graf pokriva samo sate u kojima UV moze biti razlicit od nule. Ako
 # podataka nema, uzme se ovaj raspon.
 UV_WINDOW_FALLBACK = (6, 21)
@@ -235,6 +228,9 @@ class DayPart:
 
     label: str
     condition: Optional[Condition] = None
+    # Prosjek satnih temperatura tog dijela dana - "kako je ujutro", a ne
+    # dnevni minimum, koji obicno padne u pet ujutro, izvan jutra.
+    temp_c: Optional[float] = None
     # Najveca satna vjerojatnost oborine u tom dijelu dana. "Najveca", ne
     # prosjek: pljusak od tri sata na 80% unutar sest sati je 80% sanse da
     # pokisnes, a ne 40%. Ispisuje se samo kad slikica pokazuje oborinu -
@@ -265,6 +261,8 @@ class DayPart:
         text = "{0} {1}".format(self.label, self.condition_label)
         if self.prob_label:
             text += " " + self.prob_label
+        if self.temp_c is not None:
+            text += ", {0} C".format(self.temp_c)
         return text
 
 
@@ -277,6 +275,7 @@ def day_part(label, hours):
     return DayPart(
         label=label,
         condition=day_condition(hours),
+        temp_c=rounded(mean([h.temp_c for h in hours])),
         precip_prob=max(probs) if probs else None,
     )
 
@@ -499,52 +498,6 @@ class Aggregated:
                 break
 
         return stops
-
-    @property
-    def tanning_windows(self):
-        """Nizovi uzastopnih sati u kojima je UV izmedu TAN_MIN i TAN_MAX.
-
-        Vraca popis parova (prvi sat, zadnji sat), oboje ukljucivo.
-        """
-        windows = []
-        start = None
-
-        for hour in self.day_hours:
-            # Usporeduje se zaokruzeni UV, isto kao kod razreda gore. Inace
-            # sat s 2.9 ispadne, a onaj do njega s 3.0 udje, pa se razmak
-            # raspadne na komadice zbog jedne desetinke.
-            pogodan = (
-                hour.uv is not None
-                and TAN_MIN_UV <= round(hour.uv) <= TAN_MAX_UV
-            )
-            if pogodan and start is None:
-                start = hour.hour
-            elif not pogodan and start is not None:
-                windows.append((start, hour.hour - 1))
-                start = None
-
-        if start is not None:
-            windows.append((start, self.day_hours[-1].hour))
-
-        return windows
-
-    @property
-    def tanning_label(self):
-        """Sati za suncanje kao tekst, npr. "09:00-12:00 i 16:00-18:00".
-
-        Sat 9 pokriva razdoblje 09:00-10:00, pa kraj ide na zadnji sat + 1.
-        """
-        windows = self.tanning_windows
-        if not windows:
-            return ""
-
-        rasponi = [
-            "{0:02d}:00-{1:02d}:00".format(start, end + 1)
-            for start, end in windows
-        ]
-        if len(rasponi) == 1:
-            return rasponi[0]
-        return "{0} i {1}".format(", ".join(rasponi[:-1]), rasponi[-1])
 
     @property
     def icon(self):

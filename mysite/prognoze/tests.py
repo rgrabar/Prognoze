@@ -332,7 +332,7 @@ class DiacriticsTests(SimpleTestCase):
         # da su rijeci s dijakriticima stvarno u njoj.
         path = Path(settings.BASE_DIR) / "templates" / "prognoza.html"
         html = path.read_text(encoding="utf-8")
-        for rijec in ("Traži", "Točna lokacija", "Učitavam", "sunčanje", "Sljedeći dani"):
+        for rijec in ("Traži", "Točna lokacija", "Učitavam", "Isključi točnu lokaciju", "Sljedeći dani"):
             with self.subTest(rijec=rijec):
                 self.assertIn(rijec, html)
 
@@ -1101,9 +1101,10 @@ class VoteTests(SimpleTestCase):
 class DayPartTests(SimpleTestCase):
     """Jutro i popodne: slikica po istom pravilu kao dan, i sansa kise."""
 
-    def _hour(self, condition, prob=None):
+    def _hour(self, condition, prob=None, temp=20.0):
         return aggregate.AggregatedHour(
-            hour=0, label="", condition=condition, precip_prob=prob, sources=1
+            hour=0, label="", condition=condition, precip_prob=prob,
+            temp_c=temp, sources=1,
         )
 
     def test_kisa_u_jednom_satu_obiljezi_dio_dana(self):
@@ -1113,7 +1114,18 @@ class DayPartTests(SimpleTestCase):
         self.assertEqual(dio.condition, Condition.RAIN)
         self.assertTrue(dio.is_wet)
         self.assertEqual(dio.prob_label, "70%")
-        self.assertEqual(dio.title, "ujutro kiša 70%")
+        self.assertEqual(dio.title, "ujutro kiša 70%, 20.0 C")
+
+    def test_temperatura_dijela_dana_je_prosjek_njegovih_sati(self):
+        # Ne dnevni minimum - taj padne u pet ujutro, izvan jutra.
+        hours = [self._hour(Condition.CLEAR, temp=t) for t in (17.0, 18.0, 19.0, 20.0)]
+        dio = aggregate.day_part("ujutro", hours)
+        self.assertEqual(dio.temp_c, 18.5)
+
+        # Sati bez temperature ne kvare prosjek; bez ijednog nema ni broja.
+        hours.append(self._hour(Condition.CLEAR, temp=None))
+        self.assertEqual(aggregate.day_part("ujutro", hours).temp_c, 18.5)
+        self.assertIsNone(aggregate.day_part("ujutro", []).temp_c)
 
     def test_sansa_je_najveca_satna_a_ne_prosjek(self):
         # Pljusak od tri sata na 80% unutar sest sati je 80% sanse da
@@ -1129,7 +1141,7 @@ class DayPartTests(SimpleTestCase):
         self.assertEqual(dio.condition, Condition.OVERCAST)
         self.assertFalse(dio.is_wet)
         self.assertEqual(dio.prob_label, "")
-        self.assertEqual(dio.title, "ujutro oblačno")
+        self.assertEqual(dio.title, "ujutro oblačno, 20.0 C")
 
     def test_kisa_bez_poznate_sanse_nema_postotka(self):
         dio = aggregate.day_part("ujutro", [self._hour(Condition.RAIN)])
@@ -1442,53 +1454,6 @@ class AggregateBuildTests(SimpleTestCase):
         # Ljestvica ide do UV_MIN_SCALE (3), pa je vrhunac na trecini.
         self.assertAlmostEqual(result.uv_peak_hour.uv_pct, 33.3, places=1)
 
-    def test_suncanje_izbjegava_podne_kad_je_uv_jak(self):
-        # Vrhunac 10 znaci da je oko podneva iznad TAN_MAX, pa ostanu dva
-        # razmaka - jutro i poslijepodne.
-        forecasts = [self._forecast("a", 25.0, Condition.CLEAR, 10.0, 0, uv=10)]
-        result = aggregate.build(self.location, forecasts, now_utc=self.now)
-
-        self.assertEqual(len(result.tanning_windows), 2)
-        prvi, drugi = result.tanning_windows
-        # UV je 10 - |12 - sat|: u 8h je 6 (jos moze), u 9h vec 7 (previse).
-        self.assertEqual(prvi, (5, 8))
-        self.assertEqual(drugi, (16, 19))
-        self.assertEqual(result.tanning_label, "05:00-09:00 i 16:00-20:00")
-
-    def test_suncanje_je_jedan_raspon_kad_je_uv_umjeren(self):
-        # Vrhunac 6 nikad ne prijede TAN_MAX, pa je razmak jedan i neprekinut.
-        forecasts = [self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0, uv=6)]
-        result = aggregate.build(self.location, forecasts, now_utc=self.now)
-
-        self.assertEqual(len(result.tanning_windows), 1)
-        self.assertEqual(result.tanning_windows[0], (9, 15))
-        self.assertEqual(result.tanning_label, "09:00-16:00")
-
-    def test_granica_gleda_zaokruzeni_uv(self):
-        # 2.9 i 3.0 su isti sat po WHO ljestvici, pa ne smiju razdvojiti
-        # razmak. Prije je 2.9 ispadao i razmak se lomio na komadice.
-        forecast = self._forecast("a", 25.0, Condition.CLEAR, 10.0, 0, uv=6)
-        for point in forecast.hours:
-            point.uv = 2.9
-        result = aggregate.build(self.location, [forecast], now_utc=self.now)
-
-        self.assertEqual(len(result.tanning_windows), 1)
-        self.assertEqual(result.tanning_windows[0], (0, 23))
-
-    def test_slab_uv_nema_sati_za_suncanje(self):
-        forecasts = [self._forecast("a", 5.0, Condition.CLEAR, 10.0, 0, uv=2)]
-        result = aggregate.build(self.location, forecasts, now_utc=self.now)
-
-        self.assertEqual(result.tanning_windows, [])
-        self.assertEqual(result.tanning_label, "")
-
-    def test_bez_uv_podataka_nema_ni_sati_za_suncanje(self):
-        forecasts = [self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)]
-        result = aggregate.build(self.location, forecasts, now_utc=self.now)
-
-        self.assertEqual(result.tanning_windows, [])
-        self.assertEqual(result.tanning_label, "")
-
     def test_krivulja_ima_tocku_po_satu(self):
         forecasts = [self._forecast("a", 25.0, Condition.CLEAR, 10.0, 0, uv=8)]
         result = aggregate.build(self.location, forecasts, now_utc=self.now)
@@ -1663,8 +1628,10 @@ class AggregateBuildTests(SimpleTestCase):
         jutro, popodne = sutra.parts
         self.assertEqual(jutro.condition, Condition.RAIN)
         self.assertEqual(jutro.prob_label, "75%")
+        self.assertEqual(jutro.temp_c, 15.0)
         self.assertEqual(popodne.condition, Condition.CLEAR)
         self.assertEqual(popodne.prob_label, "")
+        self.assertEqual(popodne.temp_c, 15.0)
         # Dijelovi su u opisu plocice.
         self.assertIn("ujutro kiša 75%", sutra.title)
         self.assertIn("popodne vedro", sutra.title)
