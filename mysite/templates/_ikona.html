@@ -1,0 +1,29 @@
+{% load static %}{% comment %}
+    Jedna slikica, u inacici koja odgovara temi.
+
+    Slikice su crtane na bijeloj podlozi. Na svijetloj temi se koriste
+    takve kakve jesu - bijeli kvadratic iza crteza je dio izgleda. Na
+    tamnoj bi taj kvadratic svijetlio, pa ondje ide inacica bez pozadine
+    iz `prozirno/` (vidi `manage.py prozirne`).
+
+    Zato `<picture>`: preglednik sam bira izvor, pa nema ni treptaja ni
+    dvostrukog preuzimanja. Koji je izvor na redu kaze `media`, a nju
+    postavlja posluzitelj (`tema_media`):
+
+        prati sustav  ->  (prefers-color-scheme: dark)
+        tamno         ->  all       (uvijek prozirna)
+        svijetlo      ->  not all   (nikad prozirna)
+
+    Tako i rucno odabrana tema dobije prave slikice, sto s pukim
+    `media="(prefers-color-scheme: dark)"` ne bi islo: ona zna samo za
+    postavku sustava. Prekidac teme zato usput prepisuje `media`.
+
+    Ocekuje: `ime` (npr. "sun.png") i `opis`; neobavezno `razred`,
+    `naslov` i `lijeno`.
+{% endcomment %}<picture>
+    <source srcset="{% static 'prozirno/'|add:ime %}" media="{{ tema_media }}">
+    <img{% if razred %} class="{{ razred }}"{% endif %}
+         src="{% static ime %}" alt="{{ opis }}"
+         {% if naslov %}title="{{ naslov }}"{% endif %}
+         {% if lijeno %}loading="lazy"{% endif %}>
+</picture>

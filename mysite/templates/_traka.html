@@ -12,8 +12,7 @@
                  title="{{ sat.title }}">
                 <div class="kvadrat">
                     {% if sat.sources %}
-                        <img src="{% static sat.icon %}"
-                             alt="{{ sat.condition_label }}" loading="lazy">
+                        {% include "_ikona.html" with ime=sat.icon opis=sat.condition_label lijeno=1 %}
                     {% endif %}
                 </div>
                 <div class="cas">{{ sat.hour }}</div>

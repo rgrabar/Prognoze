@@ -1,4 +1,8 @@
 :root {
+    /* Preglednik neka zna da stranica ima obje teme: tako i klizaci,
+       okviri polja i slicno dodu u tamnoj inacici, a ne svijetli. */
+    color-scheme: light dark;
+
     --tekst: #1b1b1f;
     --slabo: #6b6b76;
     --linija: #e2e2e8;
@@ -11,10 +15,126 @@
     --sat-plava-sada: #bcdefa;
     --sat-plava-odabran: #93c9f2;
     --sat-rub-sada: #1f7fd0;
+
+    /* Pilula "Ucitavam prognozu" je plava podloga s bijelim slovima, pa
+       joj treba svoja boja: naglasak odozgo je za slova i okvire, i na
+       tamnoj temi postaje svjetliji - a podloga tada mora potamniti. */
+    --pilula: #1f7fd0;
+    --na-pilula: #ffffff;
+
+    --sjena: rgba(0, 0, 0, 0.12);
+    --sjena-jaka: rgba(0, 0, 0, 0.22);
+    /* Blagi prekrivac za odabrani sat u UV grafu. */
+    --prekrivac: rgba(0, 0, 0, 0.06);
+    --uv-sada: rgba(31, 127, 208, 0.12);
+    --uv-sada-odabran: rgba(31, 127, 208, 0.26);
+    /* Kosa sraffura za sat bez podataka. */
+    --prazno-a: #ededf1;
+    --prazno-b: #f7f7fa;
+
+    --greska: #b3261e;
+    --upozorenje-pozadina: #fff3cd;
+    --upozorenje-rub: #ffe08a;
+
+    /* Prekidaci, da se pravila ne pisu dvaput: boje razreda UV-a i zraka
+       na tamnoj temi posvijetle, a prekidac teme pokazuje onu slikicu na
+       koju ce klik prebaciti - na svijetloj mjesec, na tamnoj sunce. */
+    --posvijetli: 0%;
+    --tema-sunce: none;
+    --tema-mjesec: block;
+}
+
+/* --- tamna tema ---
+
+   Prati postavku sustava, ali je covjek moze i sam odabrati: tada
+   posluzitelj na <html> stavi `data-tema`, a ovdje su zato dva bloka.
+
+   Prvi vrijedi kad sustav kaze tamno, a covjek nije izricito trazio
+   svijetlo; drugi kad je sam odabrao tamno. Specificnost im je jednaka,
+   pa odlucuje redoslijed - izricit odabir mora doci zadnji.
+
+   Boje su u oba bloka iste (test to i provjerava); mijenjaju se samo
+   varijable, pa ostatak datoteke ne zna da tema postoji. Jedine su
+   iznimke slikice: vidi `prozirno/`.
+
+   Podloge idu u tri stepenice (stranica, kartica, plocica) jer na tamnom
+   zaslonu ravna ploha izgleda kao rupa; razlika medu njima je namjerno
+   mala, da stranica ostane mirna. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-tema="svijetlo"]) {
+        --tekst: #e7e8ee;
+        --slabo: #9b9dab;
+        --linija: #2c303a;
+        --karta: #1c1f26;
+        --pozadina: #131519;
+
+        --sat-plava: #213141;
+        --sat-plava-sada: #2f5478;
+        --sat-plava-odabran: #3d6d9c;
+        /* Izvorna plava (#1f7fd0) je na tamnom pretamna za slova i rubove. */
+        --sat-rub-sada: #5aa9f2;
+
+        --pilula: #1a5891;
+
+        --sjena: rgba(0, 0, 0, 0.5);
+        --sjena-jaka: rgba(0, 0, 0, 0.6);
+        --prekrivac: rgba(255, 255, 255, 0.09);
+        --uv-sada: rgba(90, 169, 242, 0.16);
+        --uv-sada-odabran: rgba(90, 169, 242, 0.32);
+        --prazno-a: #1f222a;
+        --prazno-b: #262a33;
+
+        --greska: #ff9c93;
+        --upozorenje-pozadina: #3a3220;
+        --upozorenje-rub: #5f5128;
+
+        --posvijetli: 42%;
+        --tema-sunce: block;
+        --tema-mjesec: none;
+    }
+}
+
+:root[data-tema="tamno"] {
+    --tekst: #e7e8ee;
+    --slabo: #9b9dab;
+    --linija: #2c303a;
+    --karta: #1c1f26;
+    --pozadina: #131519;
+
+    --sat-plava: #213141;
+    --sat-plava-sada: #2f5478;
+    --sat-plava-odabran: #3d6d9c;
+    /* Izvorna plava (#1f7fd0) je na tamnom pretamna za slova i rubove. */
+    --sat-rub-sada: #5aa9f2;
+
+    --pilula: #1a5891;
+
+    --sjena: rgba(0, 0, 0, 0.5);
+    --sjena-jaka: rgba(0, 0, 0, 0.6);
+    --prekrivac: rgba(255, 255, 255, 0.09);
+    --uv-sada: rgba(90, 169, 242, 0.16);
+    --uv-sada-odabran: rgba(90, 169, 242, 0.32);
+    --prazno-a: #1f222a;
+    --prazno-b: #262a33;
+
+    --greska: #ff9c93;
+    --upozorenje-pozadina: #3a3220;
+    --upozorenje-rub: #5f5128;
+
+    --posvijetli: 42%;
+    --tema-sunce: block;
+    --tema-mjesec: none;
 }
 
 * {
     box-sizing: border-box;
+}
+
+/* <picture> je samo omot oko slikice (vidi `_ikona.html`); `contents` ga
+   mice iz rasporeda, pa slikica ostaje izravno dijete svog retka i sva
+   dosadasnja pravila za `img` vrijede nepromijenjena. */
+picture {
+    display: contents;
 }
 
 body {
@@ -33,11 +153,91 @@ body {
     gap: 20px;
 }
 
-/* --- trazilica --- */
+/* --- vrh: trazilica i prekidaci --- */
+
+/* Trazilica se rasteze, prekidaci ostaju svoje sirine. `stretch` im daje
+   istu visinu kao polju, pa ne treba pogadati brojku. */
+.vrh {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.vrh .trazilica {
+    flex: 1;
+    min-width: 0;
+}
+
+.alati {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+}
 
 .trazilica {
     display: flex;
     gap: 8px;
+}
+
+/* Kvadratni gumb sa slikicom: tema i tocna lokacija. */
+.ikona-gumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+    flex: 0 0 auto;
+    border: 1px solid var(--linija);
+    border-radius: 8px;
+    background: var(--karta);
+    color: var(--tekst);
+    cursor: pointer;
+}
+
+.ikona-gumb:hover:not(:disabled) {
+    border-color: var(--slabo);
+}
+
+/* Mjera mora biti u CSS-u, a ne samo u `width` atributu: `display: block`
+   (kojim se prebacuje sunce/mjesec) inace pusti crtez da se rastegne po
+   cijeloj sirini gumba. */
+.ikona-gumb svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+}
+
+.ikona-gumb:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Dok je tocna lokacija ukljucena, nisan je plav - da se vidi da je to
+   stanje, a ne samo gumb koji ceka. */
+.ikona-gumb.ukljuceno {
+    color: var(--sat-rub-sada);
+    border-color: var(--sat-rub-sada);
+}
+
+/* Lokacija nije uspjela: kratko crveno, jer se kod slikice bez natpisa
+   nema gdje drugdje reci. */
+.ikona-gumb.pao {
+    color: var(--greska);
+    border-color: var(--greska);
+}
+
+/* Prekidac teme nosi obje slikice; paleta kaze koja se vidi.
+
+   Imena su `tema-sunce` i `tema-mjesec`, a ne `sunce`: `.sunce` je vec
+   ploca s izlaskom i zalaskom u kartici "Danas", i njezin `padding` bi
+   zajedno s `box-sizing: border-box` pojeo cijeli crtez - na sirokom
+   zaslonu do nule, a na uskom bi ostao komadic i crta od `border-bottom`. */
+.tema-sunce {
+    display: var(--tema-sunce);
+}
+
+.tema-mjesec {
+    display: var(--tema-mjesec);
 }
 
 /* --- traka ucitavanja --- */
@@ -102,12 +302,12 @@ body {
     transform: translateX(-50%);
     padding: 7px 16px;
     border-radius: 999px;
-    background: var(--sat-rub-sada);
-    color: #fff;
+    background: var(--pilula);
+    color: var(--na-pilula);
     font-size: 13px;
     font-weight: 600;
     white-space: nowrap;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 4px 14px var(--sjena-jaka);
 }
 
 @keyframes teku {
@@ -163,7 +363,7 @@ body {
     background: var(--karta);
     border: 1px solid var(--linija);
     border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 24px var(--sjena);
 }
 
 .prijedlozi[hidden] {
@@ -257,31 +457,6 @@ body {
 
 .odakle {
     font-style: italic;
-}
-
-/* Prekidac za tocnu lokaciju: gumb dok je iskljucena, veza dok je
-   ukljucena. Oboje izgleda isto - covjeku je to jedan prekidac. */
-.tocnije {
-    display: inline-block;
-    padding: 5px 12px;
-    font: inherit;
-    font-size: 13px;
-    line-height: normal;
-    border: 1px solid var(--linija);
-    border-radius: 999px;
-    background: var(--pozadina);
-    color: var(--tekst);
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.tocnije:hover:not(:disabled) {
-    border-color: var(--slabo);
-}
-
-.tocnije:disabled {
-    opacity: 0.6;
-    cursor: default;
 }
 
 /* --- glavni brojevi --- */
@@ -402,10 +577,10 @@ body {
 .traka .sat.prazno .kvadrat {
     background: repeating-linear-gradient(
         45deg,
-        #ededf1,
-        #ededf1 3px,
-        #f7f7fa 3px,
-        #f7f7fa 6px
+        var(--prazno-a),
+        var(--prazno-a) 3px,
+        var(--prazno-b) 3px,
+        var(--prazno-b) 6px
     );
 }
 
@@ -550,7 +725,7 @@ body {
 }
 
 .uv-celija.odabran {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--prekrivac);
 }
 
 /* --- UV graf --- */
@@ -608,13 +783,13 @@ body {
 }
 
 .uv-celija.trenutni {
-    background: rgba(31, 127, 208, 0.12);
+    background: var(--uv-sada);
 }
 
 /* Ovo pravilo mora doci poslije `.trenutni`, inace ga ono nadjaca (ista
    tezina, a definirano je nize) pa odabir trenutnog sata ne bi imao odziv. */
 .uv-celija.trenutni.odabran {
-    background: rgba(31, 127, 208, 0.26);
+    background: var(--uv-sada-odabran);
 }
 
 /* --- izlazak i zalazak sunca --- */
@@ -865,15 +1040,49 @@ body {
 }
 
 .izvori .pao {
-    color: #b3261e;
+    color: var(--greska);
     font-size: 13px;
+}
+
+/* Kratka poruka ispod trazilice - zasad samo o tocnoj lokaciji. */
+.obavijest {
+    margin: 0;
+    padding: 11px 14px;
+    border-radius: 10px;
+    background: var(--sat-plava);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.obavijest.lose {
+    background: var(--upozorenje-pozadina);
+    border: 1px solid var(--upozorenje-rub);
+}
+
+.obavijest[hidden] {
+    display: none;
 }
 
 .upozorenje {
     padding: 14px 16px;
     border-radius: 10px;
-    background: #fff3cd;
-    border: 1px solid #ffe08a;
+    background: var(--upozorenje-pozadina);
+    border: 1px solid var(--upozorenje-rub);
+}
+
+/* --- boje koje stizu iz koda ---
+
+   Razredi UV indeksa i kakvoce zraka imaju sluzbene boje, pa ih predlozak
+   dobiva iz Pythona i postavlja kao `--boja`. Na tamnoj se posvijetle za
+   `--posvijetli`: tamnocrvena (#960032, "vrlo losa") i ljubicasta se
+   inace na tamnoj podlozi jedva razaznaju. Na svijetloj je pomak 0%, pa
+   boja ostane kakva je stigla.
+
+   Prvi redak ostaje i kao zaliha: preglednik koji ne zna `color-mix`
+   preskoci drugi i prikaze izvornu boju. */
+.bojano {
+    color: var(--boja);
+    color: color-mix(in srgb, var(--boja), white var(--posvijetli));
 }
 
 @media (max-width: 520px) {

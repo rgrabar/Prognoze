@@ -138,9 +138,16 @@ ime, koordinate i zonu, pa se stranica prikaze **bez ijednog upita za
 mjesto**. Cita ga posluzitelj, a ne JavaScript: tako nema bljeska krivog
 grada pa preusmjeravanja.
 
-**Tocna lokacija je prekidac**, i uvijek je na stranici: dok je iskljucena
-stoji gumb "Tocna lokacija", dok je ukljucena veza "Iskljuci tocnu
-lokaciju". Isti kolacic uz grad nosi i tu zelju (`gps`: `da` ili `ne`):
+**Tocna lokacija je prekidac**, i uvijek je na stranici, uz trazilicu:
+nisan koji je pali, a dok je ukljucena stoji plavo i gasi je. Gumb nosi
+samo slikicu, pa se sto se dogada ispisuje drugdje - dok trazi, traka i
+natpis "Trazim lokaciju..."; ako ne uspije, poruka ispod trazilice i
+crveni rubic. Bez toga neuspjeh izgleda kao da gumb ne radi (opis u
+`title` se na dodir ne vidi).
+
+Za geolokaciju preglednik trazi **siguran kontekst**: radi na HTTPS-u i na
+`localhost`, ali ne na obicnom HTTP-u preko mrezne adrese (npr.
+`http://192.168.0.192:8000`) - ondje nema ni upita, poziv odmah padne. Isti kolacic uz grad nosi i tu zelju (`gps`: `da` ili `ne`):
 
 * **Ukljucena** (`da`): lokacija se na svakom posjetu trazi odmah, i uz
   pitanje preglednika ako ga on postavlja svaki put - na to je covjek
@@ -317,7 +324,7 @@ Kartice su podijeljene po vremenu na koje se odnose:
 
 * **gornja kartica** - trenutno stanje (temperatura, vjetar, UV, zrak);
 * **Danas** - traka po satima, izlazak i zalazak sunca, UV graf;
-* **Sljedeci dani** - pregled pet dana i, sklopljeno, sutra po satima;
+* **Sljedeci dani** - pregled pet dana i, sklopljeno, svaki dan po satima;
 * **Izvori** - tko je sto rekao.
 
 Prije su sutra po satima i pregled dana bili razbacani po danasnjim
@@ -552,7 +559,153 @@ Stanja bez sunca na slikici - kisa, snijeg, susnjezica, magla, oblak,
 grmljavina - izgledaju isto danju i nocu, pa im nocna inacica ne treba.
 
 Nova slikica se ubacuje tako da se doda u `CONDITION_ICONS` (ili
-`NIGHT_ICONS` za nocnu inacicu) - nista drugo se ne dira.
+`NIGHT_ICONS` za nocnu inacicu), pa se pokrene `python manage.py prozirne`
+(vidi nize) - nista drugo se ne dira.
+
+### Prozirne inacice, za tamnu temu
+
+Slikice su crtane na **cistoj bijeloj podlozi, bez prozirnosti**. Na
+svijetloj je temi taj bijeli kvadratic iza crteza dio izgleda i ondje se
+koriste takve kakve jesu. Na tamnoj bi svijetlio, pa ondje ide inacica bez
+pozadine, iz `static/prozirno/`.
+
+Koja ce se uzeti bira **preglednik**, preko `<picture>` u `_ikona.html`:
+tako nema ni treptaja ni dvostrukog preuzimanja. Koji je izvor na redu
+kaze `media`, a nju postavlja posluzitelj po temi:
+
+| Tema | `media` | Slikica |
+|---|---|---|
+| prati sustav | `(prefers-color-scheme: dark)` | po postavci sustava |
+| tamno | `all` | uvijek prozirna |
+| svijetlo | `not all` | uvijek izvorna |
+
+Sama `(prefers-color-scheme: dark)` ne bi bila dovoljna: ona zna samo za
+postavku sustava, pa rucno odabrana tema ne bi dobila prave slikice. Zato
+prekidac teme usput prepisuje `media` na svim izvorima - inace bi se boje
+promijenile odmah, a slikice tek na sljedecem ucitavanju.
+
+`<picture>` je samo omot; `picture { display: contents }` ga mice iz
+rasporeda, pa slikica ostaje izravno dijete svog retka i sva dosadasnja
+pravila za `img` vrijede nepromijenjena.
+
+Izvorne slikice se ne diraju; iz njih se samo cita. Prozirne radi naredba:
+
+```
+python manage.py prozirne
+```
+
+Treba joj Pillow (`python -m pip install Pillow`), koji stranici inace ne
+treba - zato nije u `requirements.txt`. Gotove se slikice commitaju, pa se
+naredba pokrece samo kad se doda ili promijeni neka slikica.
+
+Pozadina se mice **poplavom s ruba**, a ne "izbaci sve bijelo": bjelina
+unutar crteza (trbuh oblaka) zatvorena je obrisom, pa je poplava ne
+dosegne i ostaje. Da je isla globalno, oblaci bi ostali samo obrisi. Rub
+se omeksa po tome koliko je pixel blizu bijeloj, inace crtez ostane
+nazubljen.
+
+Ikone pocetnog zaslona (`apple-touch-icon.png`, `icon-192.png`,
+`icon-512.png`) naredba **preskace** - one moraju ostati neprozirne.
+
+Uz pozadinu se **posvjetljuje i pretamno mastilo**. Crni obrisi (drska i
+rub kisobrana, strelice vjetra, `neznamovrime.png`) i tamnoplave kapi na
+tamnoj se podlozi gube: kap `#023e94` ima prema plocici omjer **1.1:1**,
+sto znaci da je prakticki nema.
+
+Dize se samo ono ispod praga, i to **po svjetlini** - ton i zasicenost
+ostaju, pa kap ostane plava a strelica siva. Prag (0.42) je ispod
+svjetline oblaka (0.50) i plavog platna kisobrana (0.59), pa se oni ne
+diraju. Zato ovdje ne moze obicno obrtanje boja: kisobran bi od plavog
+postao narancast.
+
+Buduci da tako mastilo vec stigne dovoljno svijetlo, CSS nema nijedno
+pravilo za slikice - `filter` se vise nigdje ne koristi.
+
+## Tamna tema
+
+Po zadanom prati **postavku sustava** (`prefers-color-scheme`), ali se
+moze i rucno odabrati - prekidac "Tema" stoji u gornjoj kartici, uz gumb
+za tocnu lokaciju.
+
+Sve boje su varijable u `:root`, a tamna tema ih samo prepisuje - ostatak
+`prognoza.css` ne zna da tema postoji. Podloge idu u tri stepenice
+(stranica, kartica, plocica), jer na tamnom zaslonu ravna ploha izgleda
+kao rupa; razlika medu njima je namjerno mala, da stranica ostane mirna.
+
+### Prekidac
+
+Stoji uz trazilicu, uz gumb za tocnu lokaciju, i nosi samo slikicu: **sunce
+ili mjesec - onu na koju ce klik prebaciti**. Koja se vidi odlucuje CSS
+(`--sunce` i `--mjesec` u paleti), pa je tocna vec pri dolasku, bez
+treptaja i bez JavaScripta.
+
+Slikice su crtane za 20 px: krupna jezgra i kratke debele zrake blizu
+nje. Sitnija jezgra s tankim zrakama uz sam rub na toj se velicini
+raspadne u tockice - izgleda kao mrlja, a ne kao sunce.
+
+Prekidac je dvopolozajan, ali se **"prati sustav" ne gubi**: kad odabrana
+tema ispadne ista kao sustavova, pamti se "auto" umjesto nje. Tko se vrati
+na svoju uobicajenu temu time opet prati sustav, pa ga stranica slijedi i
+kad ga sljedeci put promijeni. Trece stanje se tako nigdje ne mora pisati
+ni objasnjavati.
+
+Odabir se pamti u kolacicu `prognoze_tema` (godinu dana); "auto" ga brise,
+pa se ne pamti nista. Kolacic **cita posluzitelj** i stavlja `data-tema`
+na `<html>`, isto kao kod zapamcenog mjesta: stranica tako vec stigne
+obojana. Da je cita JavaScript, prvi bi kadar bio u temi sustava pa bi
+zatreperio u odabranu.
+
+Prekidac je obicna veza na `?tema=...`, pa **radi i bez JavaScripta** -
+posluzitelj postavi kolacic i vrati obojanu stranicu. U "auto" stanju
+posluzitelj ne zna sto sustav kaze, pa vezu pogada (tamno); skripta je pri
+ucitavanju ispravi. Skripta je presrece
+i mijenja temu odmah, bez ucitavanja: cijela je stranica vec tu, mijenja
+joj se samo paleta. Kolacic zato nije `httponly`.
+
+Zbog rucnog odabira tamne boje stoje na **dva mjesta**:
+
+```css
+@media (prefers-color-scheme: dark) {
+    :root:not([data-tema="svijetlo"]) { ... }   /* sustav kaze tamno */
+}
+:root[data-tema="tamno"] { ... }                /* covjek je odabrao */
+```
+
+CSS nema nacina da isti popis svojstava podijeli medu selektorima, pa se
+popis ponavlja. Specificnost im je jednaka, pa odlucuje **redoslijed**:
+izricit odabir mora doci zadnji, inace ga sustav nadjaca. Dva testa cuvaju
+oboje - da su blokovi isti i da su u tom redoslijedu.
+
+Pravilo koje nije samo boja ne ponavlja se: umjesto njega je prekidac u
+paleti (`--posvijetli`, na svijetloj `0%`), pa ostaje jedno pravilo.
+
+`theme-color` (boja trake preglednika oko instalirane stranice) ima dvije
+inacice, po temi sustava. Kad je tema odabrana rucno, skripta objema upise
+istu boju - inace bi traka ostala u temi sustava.
+
+Sto nije samo zamjena varijable:
+
+* **Slikice** - svijetla tema koristi izvorne, tamna prozirne; vidi
+  "Prozirne inacice" gore.
+* **Boje razreda UV-a i zraka** dolaze iz Pythona (sluzbene su, po WHO-u i
+  EEA-i), pa ih predlozak postavlja kao `--boja`, a CSS ih posvijetli za
+  `--posvijetli` (0% na svijetloj, 42% na tamnoj). Bez toga se tamnocrvena
+  ("vrlo losa", #960032) i ljubicasta na tamnoj podlozi jedva razaznaju.
+  Preglednik koji ne zna `color-mix` preskoci taj redak i prikaze izvornu
+  boju.
+* **Plava** (`--sat-rub-sada`) u tamnoj temi posvijetli, jer je izvorna
+  #1f7fd0 na tamnom pretamna za slova i rubove. Podloga pilule
+  "Ucitavam prognozu" ima zato svoju varijablu (`--pilula`): njoj treba
+  obratno, potamniti, da bijela slova na njoj ostanu citljiva.
+* **`color-scheme: light dark`** u `:root` - bez toga klizaci i okviri
+  polja ostanu svijetli.
+* **`theme-color`** ima dvije inacice, po temi - to je boja trake
+  preglednika oko instalirane stranice.
+
+Testovi to cuvaju: da tamni blok postoji, da **svaka** varijabla iz
+`:root` ima tamnu inacicu (zaboravljena boja se inace vidi tek kad se na
+nju naleti), da svaka slikica ima prozirnu inacicu, te da prekidac pamti,
+brise i vrti krug kako treba.
 
 ## Struktura
 

@@ -13,6 +13,49 @@ from django.shortcuts import render
 from . import aggregate, air, geocode, providers
 
 
+# Tema koju je covjek sam odabrao. Prazno znaci "prati sustav", sto je i
+# pocetno stanje - tada se ne pamti nista.
+TEMA_COOKIE = "prognoze_tema"
+TEMA_MAX_AGE = 365 * 24 * 3600
+TEME = ("svijetlo", "tamno")
+
+# Prekidac je dvopolozajan: sunce ili mjesec. "Prati sustav" je pocetno
+# stanje i ne gubi se - preglednik pamti "auto" kad odabrana tema ispadne
+# ista kao sustavova (vidi skriptu u predlosku). Posluzitelj sto sustav
+# kaze ne zna, pa u tom stanju vezu pogada; skripta je poslije ispravi.
+
+# Kad se koristi prozirna inacica slikice (vidi `_ikona.html`). Na
+# svijetloj temi nikad: ondje je bijeli kvadratic iza crteza dio izgleda.
+TEMA_MEDIJ = {
+    "": "(prefers-color-scheme: dark)",
+    "tamno": "all",
+    "svijetlo": "not all",
+}
+
+
+def tema_next(tema):
+    """Sto prekidac nudi: suprotno od onoga sto je na zaslonu."""
+    return "svijetlo" if tema == "tamno" else "tamno"
+
+
+def tema_for(request):
+    """Odabrana tema: "svijetlo", "tamno" ili "" (prati sustav).
+
+    Odabir stize kao `?tema=`, a inace se cita iz kolacica. Sve sto nije
+    poznata tema znaci "prati sustav" - i nepoznata vrijednost i izricit
+    `?tema=auto`, pa se time prekidac i vraca na pocetak.
+
+    Cita ga posluzitelj, kao i zapamceno mjesto: tako stranica vec stigne
+    obojana. Da je cita JavaScript, prvi bi kadar bio u temi sustava pa bi
+    zatreperio u odabranu.
+    """
+    trazeno = request.GET.get("tema")
+    if trazeno is not None:
+        return trazeno if trazeno in TEME else ""
+    zapamceno = request.COOKIES.get(TEMA_COOKIE, "")
+    return zapamceno if zapamceno in TEME else ""
+
+
 def css_version():
     """Vrijeme zadnje izmjene stilova, kao broj.
 
@@ -55,6 +98,8 @@ def op(request):
     if turn_off:
         gps = geocode.GPS_OFF
 
+    tema = tema_for(request)
+
     location = geocode.resolve(
         query=query,
         latitude=request.GET.get("lat"),
@@ -96,6 +141,10 @@ def op(request):
             "prognoza": data,
             "zrak": quality,
             "css_v": css_version(),
+            # Prazno = prati sustav, pa <html> ostaje bez `data-tema`.
+            "tema": tema,
+            "tema_media": TEMA_MEDIJ[tema],
+            "tema_sljedeca": tema_next(tema),
             # Nazivi dijelova dana za zaglavlje popisa na uskom zaslonu.
             "dijelovi_dana": aggregate.DAY_PARTS,
             # Prekidac za tocnu lokaciju je uvijek tu: dok je ukljucena,
@@ -138,5 +187,15 @@ def op(request):
             samesite="Lax",
             httponly=True,
         )
+
+    # Tema se pamti samo kad ju je covjek upravo mijenjao. Nije httponly:
+    # prekidac je s njom mijenja i iz preglednika, bez ponovnog ucitavanja.
+    if request.GET.get("tema") is not None:
+        if tema:
+            response.set_cookie(
+                TEMA_COOKIE, tema, max_age=TEMA_MAX_AGE, samesite="Lax"
+            )
+        else:
+            response.delete_cookie(TEMA_COOKIE, samesite="Lax")
 
     return response

@@ -4,7 +4,7 @@
     upit prema desetak vanjskih usluga, sto zna potrajati sekundu-dvije, a
     dotle se na ekranu ne dogada nista.
 {% endcomment %}
-<html lang="hr">
+<html lang="hr"{% if tema %} data-tema="{{ tema }}"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,7 +19,8 @@
     {% endcomment %}
     <link rel="apple-touch-icon" href="{% static 'apple-touch-icon.png' %}">
     <link rel="manifest" href="{% static 'manifest.json' %}">
-    <meta name="theme-color" content="#1f7fd0">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#1f7fd0">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131519">
     <meta name="application-name" content="Prognoze">
     <meta name="apple-mobile-web-app-title" content="Prognoze">
     <meta name="mobile-web-app-capable" content="yes">
@@ -36,16 +37,71 @@
 
 <div class="omot">
 
-    <form class="trazilica" method="get" action="." id="trazilica">
-        <div class="polje">
-            <input type="text" name="q" value="{{ query }}" id="mjesto"
-                   placeholder="Rijeka, Zagreb, Split..." aria-label="Mjesto"
-                   autocomplete="off" role="combobox" aria-expanded="false"
-                   aria-controls="prijedlozi" aria-autocomplete="list">
-            <ul class="prijedlozi" id="prijedlozi" role="listbox" hidden></ul>
+    <div class="vrh">
+        <form class="trazilica" method="get" action="." id="trazilica">
+            <div class="polje">
+                <input type="text" name="q" value="{{ query }}" id="mjesto"
+                       placeholder="Rijeka, Zagreb, Split..." aria-label="Mjesto"
+                       autocomplete="off" role="combobox" aria-expanded="false"
+                       aria-controls="prijedlozi" aria-autocomplete="list">
+                <ul class="prijedlozi" id="prijedlozi" role="listbox" hidden></ul>
+            </div>
+            <button type="submit">Traži</button>
+        </form>
+
+        {% comment %}
+            Dva prekidaca uz trazilicu: tema i tocna lokacija.
+
+            Prekidac teme nosi obje slikice, a koja se vidi odlucuje CSS
+            (`--sunce` i `--mjesec` u paleti) - pokazuje onu na koju ce
+            klik prebaciti. Tako je tocna vec pri dolasku, bez treptaja i
+            bez JavaScripta.
+
+            Veza radi i bez JavaScripta: posluzitelj postavi kolacic i
+            vrati obojanu stranicu. Skripta je presrece pa se tema
+            promijeni odmah.
+        {% endcomment %}
+        <div class="alati">
+            <a class="ikona-gumb tema" id="tema" href="?tema={{ tema_sljedeca }}"
+               role="button" aria-label="Promijeni temu" title="Promijeni temu">
+                {% comment %}
+                    Crtez je razmjeren za 20 px: krupna jezgra i kratke
+                    debele zrake blizu nje. Sitnija jezgra s tankim
+                    zrakama uz sam rub na toj se velicini raspadne u
+                    tockice.
+                {% endcomment %}
+                <svg class="tema-sunce" viewBox="0 0 24 24" width="20" height="20"
+                     aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="5.6" fill="currentColor"/>
+                    <g stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                        <path d="M12 4.2V1.6M12 19.8v2.6M4.2 12H1.6M19.8 12h2.6"/>
+                        <path d="M6.49 6.49L4.65 4.65M17.51 17.51l1.84 1.84M6.49 17.51l-1.84 1.84M17.51 6.49l1.84-1.84"/>
+                    </g>
+                </svg>
+                <svg class="tema-mjesec" viewBox="0 0 24 24" width="20" height="20"
+                     aria-hidden="true" focusable="false">
+                    <path fill="currentColor"
+                          d="M20.6 14.6A8.9 8.9 0 0 1 9.4 3.4a8.9 8.9 0 1 0 11.2 11.2z"/>
+                </svg>
+            </a>
+
+            {% if tocno_ukljuceno %}
+                <a id="iskljuci" class="ikona-gumb ukljuceno" href="?tocno=ne"
+                   role="button" aria-label="Isključi točnu lokaciju"
+                   title="Isključi točnu lokaciju">{% include "_nisan.html" %}</a>
+            {% else %}
+                <button type="button" id="tocnije" class="ikona-gumb" hidden
+                        aria-label="Točna lokacija"
+                        title="Točna lokacija">{% include "_nisan.html" %}</button>
+            {% endif %}
         </div>
-        <button type="submit">Traži</button>
-    </form>
+    </div>
+
+    {% comment %}
+        Mjesto za kratku poruku o lokaciji. Gumb nosi samo slikicu, pa
+        neuspjeh nema gdje pisati - a opis (`title`) se na dodir ne vidi.
+    {% endcomment %}
+    <p class="obavijest" id="obavijest" hidden></p>
 
     {% if nema_podataka %}
         <div class="upozorenje">
@@ -61,21 +117,10 @@
                 prosjek {{ prognoza.used_sources }} izvora &middot;
                 <span class="odakle">{{ prognoza.location.source }}</span>
             </span>
-            {% if tocno_ukljuceno %}
-                <a id="iskljuci" class="tocnije" href="?tocno=ne">
-                    Isključi točnu lokaciju
-                </a>
-            {% else %}
-                <button type="button" id="tocnije" class="tocnije" hidden>
-                    Točna lokacija
-                </button>
-            {% endif %}
         </div>
 
         <div class="sada">
-            <img class="vrime" src="{% static prognoza.icon %}"
-                 alt="{{ prognoza.condition_label }}"
-                 title="{{ prognoza.condition_label }}">
+            {% include "_ikona.html" with ime=prognoza.icon opis=prognoza.condition_label naslov=prognoza.condition_label razred="vrime" %}
 
             <div class="stupac">
                 <div class="veliko">{{ prognoza.temp_c|default_if_none:"?" }}&deg;C</div>
@@ -104,17 +149,14 @@
                     <div>
                         <div class="oznaka">km/h</div>
                         {% if prognoza.wind_dir %}
-                            <img src="{% static prognoza.wind_dir|add:'.png' %}"
-                                 alt="vjetar iz smjera {{ prognoza.wind_dir }}"
-                                 title="vjetar puše iz smjera {{ prognoza.wind_dir }}">
+                            {% include "_ikona.html" with ime=prognoza.wind_dir|add:'.png' opis="vjetar iz smjera "|add:prognoza.wind_dir naslov="vjetar puše iz smjera "|add:prognoza.wind_dir %}
                         {% endif %}
                     </div>
                 </div>
 
                 <div class="podatak">
                     <div class="veliko">{{ prognoza.precip_prob|default_if_none:"?" }}%</div>
-                    <img src="{% static 'umbrella.png' %}" alt="vjerojatnost kiše"
-                         title="vjerojatnost oborina">
+                    {% include "_ikona.html" with ime="umbrella.png" opis="vjerojatnost kiše" naslov="vjerojatnost oborina" %}
                 </div>
 
                 {% if prognoza.humidity is not None %}
@@ -126,7 +168,7 @@
                 <div class="stupac">
                     {% if prognoza.uv is not None %}
                         <div>
-                            <div class="veliko" style="color: {{ prognoza.uv_color }}">
+                            <div class="veliko bojano" style="--boja: {{ prognoza.uv_color }}">
                                 {{ prognoza.uv|floatformat }}
                             </div>
                             <div class="oznaka">UV &middot; {{ prognoza.uv_label }}</div>
@@ -134,7 +176,7 @@
                     {% endif %}
                     {% if zrak.ok %}
                         <div title="{{ zrak.title }}">
-                            <div class="veliko" style="color: {{ zrak.color }}">
+                            <div class="veliko bojano" style="--boja: {{ zrak.color }}">
                                 {{ zrak.aqi|floatformat }}
                             </div>
                             <div class="oznaka">Zrak &middot; {{ zrak.label }}</div>
@@ -162,14 +204,14 @@
                 {% if prognoza.sunrise_label %}
                     <div class="sunce">
                         <div class="sunce-red">
-                            <img src="{% static 'sun.png' %}" alt="izlazak sunca">
+                            {% include "_ikona.html" with ime="sun.png" opis="izlazak sunca" %}
                             <div>
                                 <div class="sunce-vrijeme">{{ prognoza.sunrise_label }}</div>
                                 <div class="oznaka">izlazak</div>
                             </div>
                         </div>
                         <div class="sunce-red">
-                            <img src="{% static 'moon.png' %}" alt="zalazak sunca">
+                            {% include "_ikona.html" with ime="moon.png" opis="zalazak sunca" %}
                             <div>
                                 <div class="sunce-vrijeme">{{ prognoza.sunset_label }}</div>
                                 <div class="oznaka">zalazak</div>
@@ -190,7 +232,7 @@
                         <div class="oznaka">UV indeks danas</div>
                         {% if prognoza.uv_peak_hour %}
                             <div class="uv-vrhunac">
-                                najviše <strong style="color: {{ prognoza.uv_max_color }}">{{ prognoza.uv_max }}</strong>
+                                najviše <strong class="bojano" style="--boja: {{ prognoza.uv_max_color }}">{{ prognoza.uv_max }}</strong>
                                 ({{ prognoza.uv_max_label }}) u {{ prognoza.uv_peak_hour.label }}
                             </div>
                         {% endif %}
@@ -267,8 +309,7 @@
                         {% for dio in dan.parts %}
                             <span class="dan-dio">
                                 <span class="dan-dio-ime">{{ dio.label }}</span>
-                                <img src="{% static dio.icon %}"
-                                     alt="{{ dio.condition_label }}" loading="lazy">
+                                {% include "_ikona.html" with ime=dio.icon opis=dio.condition_label lijeno=1 %}
                                 <span class="dan-dio-brojke">
                                     <span class="dan-temp">{{ dio.temp_c|default_if_none:"?" }}&deg;C</span>
                                     <span class="dan-posto">{{ dio.prob_label }}</span>
@@ -323,16 +364,135 @@
 </div>
 
 <script>
+// Prekidac teme.
+//
+// Boju bira CSS: bez `data-tema` prati postavku sustava, a s njom vrijedi
+// ono sto je covjek odabrao. Ovdje se samo prebacuje u krug i pamti.
+//
+// Veza u HTML-u vodi na `?tema=...` i radi i bez JavaScripta - posluzitelj
+// tada postavi kolacic i vrati obojanu stranicu. Ovdje je presrecemo, pa
+// se tema promijeni odmah, bez ucitavanja: cijela stranica je vec tu,
+// mijenja joj se samo paleta.
+(function () {
+    var gumb = document.getElementById("tema");
+    if (!gumb) {
+        return;
+    }
+
+    var GODINA = 365 * 24 * 3600;
+    var korijen = document.documentElement;
+    var tamniSustav = window.matchMedia
+        ? window.matchMedia("(prefers-color-scheme: dark)")
+        : null;
+
+    function premaSustavu() {
+        return tamniSustav && tamniSustav.matches ? "tamno" : "svijetlo";
+    }
+
+    // Sto je sad na zaslonu: izricit odabir, ili ono sto kaze sustav.
+    function sada() {
+        return korijen.getAttribute("data-tema") || premaSustavu();
+    }
+
+    function zapamti(pohrana) {
+        // Isti kolacic koji cita posluzitelj, pa sljedeca stranica stigne
+        // vec obojana. "auto" se ne pamti - brise se.
+        var rok = pohrana === "auto" ? 0 : GODINA;
+        document.cookie =
+            "prognoze_tema=" + (pohrana === "auto" ? "" : pohrana) +
+            "; max-age=" + rok + "; path=/; samesite=Lax";
+    }
+
+    // Traka preglednika oko instalirane stranice ima dvije boje, po temi
+    // sustava. Kad je tema odabrana rucno, obje moraju reci isto - inace
+    // bi traka ostala u temi sustava.
+    var TRAKA = { svijetlo: "#1f7fd0", tamno: "#131519" };
+    var oznake = document.querySelectorAll('meta[name="theme-color"]');
+
+    function uskladiTraku(tema) {
+        Array.prototype.forEach.call(oznake, function (oznaka) {
+            var svoja = oznaka.getAttribute("media").indexOf("dark") >= 0
+                ? "tamno" : "svijetlo";
+            oznaka.setAttribute("content", TRAKA[tema === "auto" ? svoja : tema]);
+        });
+    }
+
+    // Slikice bira <picture>, po `media` na izvoru (vidi `_ikona.html`).
+    // Posluzitelj je postavi po temi, pa je ovdje treba prepisati - inace
+    // bi se boje promijenile odmah, a slikice tek na sljedecem ucitavanju.
+    var MEDIJ = {
+        auto: "(prefers-color-scheme: dark)",
+        tamno: "all",
+        svijetlo: "not all"
+    };
+    var izvori = document.querySelectorAll("picture source");
+
+    function uskladiSlikice(tema) {
+        Array.prototype.forEach.call(izvori, function (izvor) {
+            izvor.media = MEDIJ[tema];
+        });
+    }
+
+    // Prekidac je dvopolozajan - sunce ili mjesec - ali se "prati sustav"
+    // ne gubi: kad odabrana tema ispadne ista kao sustavova, pamti se
+    // "auto". Tako covjek koji se vrati na svoju uobicajenu temu opet
+    // prati sustav, pa ga stranica slijedi i kad ga sljedeci put
+    // promijeni. Trece stanje tako ne treba nigdje pisati.
+    function postavi(tema) {
+        var pohrana = tema === premaSustavu() ? "auto" : tema;
+
+        if (pohrana === "auto") {
+            korijen.removeAttribute("data-tema");
+        } else {
+            korijen.setAttribute("data-tema", tema);
+        }
+        uskladiSlikice(pohrana === "auto" ? "auto" : tema);
+        // Veza ostaje ispravna i ako JavaScript poslije stane.
+        gumb.href = "?tema=" + (tema === "tamno" ? "svijetlo" : "tamno");
+        uskladiTraku(pohrana === "auto" ? "auto" : tema);
+        zapamti(pohrana);
+    }
+
+    gumb.addEventListener("click", function (dogadaj) {
+        dogadaj.preventDefault();
+        postavi(sada() === "tamno" ? "svijetlo" : "tamno");
+    });
+
+    // U "auto" stanju posluzitelj ne zna sto sustav kaze, pa vezu pogada.
+    // Ovdje se zna, pa se ispravi.
+    if (!korijen.getAttribute("data-tema")) {
+        gumb.href = "?tema=" + (premaSustavu() === "tamno" ? "svijetlo" : "tamno");
+    }
+})();
+</script>
+
+<script>
 // Traka koja pokazuje da se nesto dogada.
 //
 // Novi grad znaci upit prema desetak vanjskih usluga; kad su odgovori u
 // cacheu to je gotovo odmah, ali prvi put zna potrajati. Traka se pokrece
 // na svaku radnju koja vodi na novo ucitavanje.
-function pokreniUcitavanje() {
+function pokreniUcitavanje(poruka) {
     var traka = document.getElementById("ucitavanje");
-    if (traka) {
-        traka.hidden = false;
+    if (!traka) {
+        return;
     }
+    var natpis = traka.querySelector(".ucitavanje-poruka");
+    if (natpis) {
+        natpis.textContent = poruka || "Učitavam prognozu...";
+    }
+    traka.hidden = false;
+}
+
+// Kratka poruka ispod trazilice. Prazan tekst je sklanja.
+function javi(tekst, lose) {
+    var redak = document.getElementById("obavijest");
+    if (!redak) {
+        return;
+    }
+    redak.textContent = tekst || "";
+    redak.classList.toggle("lose", !!lose);
+    redak.hidden = !tekst;
 }
 
 function zaustaviUcitavanje() {
@@ -631,25 +791,41 @@ function zaustaviUcitavanje() {
         window.location.replace(url.toString());
     }
 
-    // Dok se trazi, to se i vidi: gumb kaze "Tražim..." i traka ide.
-    // Inace stranica izgleda gotova, a za koju sekundu se sama zamijeni -
-    // sto zbunjuje bas kad se dohvaca samo od sebe.
-    function trazi(nakonNeuspjeha) {
+    // Dok se trazi, to se i vidi: gumb potamni i traka ide. Inace stranica
+    // izgleda gotova, a za koju sekundu se sama zamijeni - sto zbunjuje
+    // bas kad se dohvaca samo od sebe.
+    //
+    // Gumb nosi samo slikicu, pa neuspjeh nema gdje pisati: umjesto toga
+    // nakratko pocrveni, a razlog stoji u opisu (`title`).
+    function opis(tekst) {
+        gumb.title = tekst;
+        gumb.setAttribute("aria-label", tekst);
+    }
+
+    function trazi() {
         gumb.hidden = false;
         gumb.disabled = true;
-        gumb.textContent = "Tražim...";
-        pokreniUcitavanje();
+        gumb.classList.remove("pao");
+        opis("Tražim lokaciju...");
+        // Traka i natpis, isto kao kod ucitavanja: gumb nosi samo slikicu,
+        // pa bi se inace jedino po boji rubica vidjelo da se nesto dogada.
+        javi("");
+        pokreniUcitavanje("Tražim lokaciju...");
         navigator.geolocation.getCurrentPosition(otvori, function (error) {
             zaustaviUcitavanje();
             gumb.disabled = false;
-            gumb.textContent = nakonNeuspjeha;
+            gumb.classList.add("pao");
+            opis("Točna lokacija");
+            javi(
+                "Lokacija nije uspjela. Provjeri dopuštenje za ovu stranicu" +
+                " u postavkama preglednika.",
+                true
+            );
             console.warn("Geolokacija odbijena ili nedostupna:", error.message);
         }, { timeout: 10000, maximumAge: 600000 });
     }
 
-    gumb.addEventListener("click", function () {
-        trazi("Nije uspjelo, probaj opet");
-    });
+    gumb.addEventListener("click", trazi);
 
     // Posluzitelj iz kolacica odlucuje sto se smije samo od sebe:
     //  - ukljucena: covjek ju je sam upalio, pa se trazi odmah - i uz
@@ -664,7 +840,7 @@ function zaustaviUcitavanje() {
     var automatski = {% if auto_lokacija %}true{% else %}false{% endif %};
 
     if (ukljucena) {
-        trazi("Točna lokacija");
+        trazi();
         return;
     }
 
@@ -676,7 +852,7 @@ function zaustaviUcitavanje() {
     if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: "geolocation" }).then(function (status) {
             if (status.state === "granted") {
-                trazi("Točna lokacija");
+                trazi();
             } else if (status.state === "prompt") {
                 gumb.hidden = false;
             }

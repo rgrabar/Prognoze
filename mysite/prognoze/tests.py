@@ -299,6 +299,248 @@ class HomeScreenIconTests(SimpleTestCase):
         self.assertIn(512, velicine)
 
 
+class ThemeSwitchTests(SimpleTestCase):
+    """Rucni odabir teme: krug, kolacic i sto zavrsi na <html>."""
+
+    def _get(self, path, cookies=None):
+        request = RequestFactory().get(path)
+        request.COOKIES = cookies or {}
+        prazan_zrak = air.AirQuality()
+        with mock.patch.object(providers, "collect", return_value=[]), \
+                mock.patch.object(air, "quality_for", return_value=prazan_zrak), \
+                mock.patch.object(geocode, "utc_offset_for", return_value=0), \
+                mock.patch.object(geocode, "from_ip", return_value=None):
+            return views.op(request)
+
+    def test_veza_nudi_suprotno_od_prikazanog(self):
+        self.assertEqual(views.tema_next("tamno"), "svijetlo")
+        self.assertEqual(views.tema_next("svijetlo"), "tamno")
+        # U "auto" posluzitelj ne zna sto sustav kaze, pa pogada svjetliju
+        # mogucnost; skripta vezu poslije ispravi.
+        self.assertEqual(views.tema_next(""), "tamno")
+
+    def test_bez_odabira_html_nema_oznaku(self):
+        html = self._get("/prognoze/").content.decode()
+
+        # Oznake nema na <html>; u skripti se rijec pojavljuje i inace.
+        self.assertIn('<html lang="hr">', html)
+        self.assertIn('href="?tema=tamno"', html)
+
+    def test_odabir_se_zapise_i_oboji_stranicu(self):
+        response = self._get("/prognoze/?tema=tamno")
+        kolacic = response.cookies.get(views.TEMA_COOKIE)
+        html = response.content.decode()
+
+        self.assertEqual(kolacic.value, "tamno")
+        self.assertEqual(kolacic["max-age"], views.TEMA_MAX_AGE)
+        # Nije httponly: prekidac ga mijenja i iz preglednika.
+        self.assertEqual(kolacic["httponly"], "")
+        self.assertIn('<html lang="hr" data-tema="tamno">', html)
+        self.assertIn('href="?tema=svijetlo"', html)
+
+    def test_zapamcena_tema_vrijedi_i_bez_parametra(self):
+        html = self._get(
+            "/prognoze/", cookies={views.TEMA_COOKIE: "svijetlo"}
+        ).content.decode()
+
+        self.assertIn('data-tema="svijetlo"', html)
+        self.assertIn('href="?tema=tamno"', html)
+
+    def test_auto_brise_zapamceno(self):
+        response = self._get(
+            "/prognoze/?tema=auto", cookies={views.TEMA_COOKIE: "tamno"}
+        )
+        kolacic = response.cookies.get(views.TEMA_COOKIE)
+
+        self.assertEqual(kolacic["max-age"], 0)
+        self.assertIn('<html lang="hr">', response.content.decode())
+
+    def test_smece_u_kolacicu_i_parametru_znaci_prati_sustav(self):
+        for kolacic in ("plavo", "", "tamno; nesto"):
+            with self.subTest(kolacic=kolacic):
+                html = self._get(
+                    "/prognoze/", cookies={views.TEMA_COOKIE: kolacic}
+                ).content.decode()
+                self.assertIn('<html lang="hr">', html)
+
+        html = self._get("/prognoze/?tema=plavo").content.decode()
+        self.assertIn('<html lang="hr">', html)
+
+    def test_bez_parametra_se_tema_ne_dira(self):
+        # Obicno ucitavanje ne smije prepisivati kolacic teme.
+        response = self._get("/prognoze/", cookies={views.TEMA_COOKIE: "tamno"})
+        self.assertNotIn(views.TEMA_COOKIE, response.cookies)
+
+    def test_slikice_prate_temu(self):
+        # Svijetla tema koristi izvorne slikice - bijeli kvadratic iza
+        # crteza je ondje dio izgleda; tamna koristi prozirne. Bira ih
+        # preglednik preko <picture>, pa `media` mora pratiti temu, i kad
+        # je odabrana rucno: "(prefers-color-scheme: dark)" zna samo za
+        # postavku sustava.
+        for tema, media in (
+            ("", "(prefers-color-scheme: dark)"),
+            ("svijetlo", "not all"),
+            ("tamno", "all"),
+        ):
+            with self.subTest(tema=tema or "auto"):
+                put = "/prognoze/?tema={0}".format(tema) if tema else "/prognoze/"
+                html = self._get(put).content.decode()
+
+                self.assertIn(
+                    '<source srcset="/static/prozirno/umbrella.png" '
+                    'media="{0}">'.format(media),
+                    html,
+                )
+                # Izvorna ostaje u <img>, kao zaliha i za svijetlu temu.
+                self.assertIn('src="/static/umbrella.png"', html)
+
+    def test_prekidac_radi_i_bez_javascripta(self):
+        # Veza vodi na posluzitelj; skripta je samo presrece.
+        html = self._get("/prognoze/").content.decode()
+        self.assertIn('<a class="ikona-gumb tema" id="tema" href="?tema=', html)
+
+    def test_prekidaci_stoje_uz_trazilicu(self):
+        # Oba su u vrhu stranice, a ne u kartici s prognozom.
+        html = self._get("/prognoze/").content.decode()
+        vrh = html[html.index('<div class="vrh">'):html.index('<div class="karta">')]
+
+        self.assertIn('id="tema"', vrh)
+        self.assertIn('id="tocnije"', vrh)
+
+    def test_prekidac_teme_nosi_obje_slikice(self):
+        # Koja se vidi odlucuje CSS, pa je tocna vec pri dolasku - bez
+        # treptaja i bez JavaScripta.
+        html = self._get("/prognoze/").content.decode()
+        self.assertIn('class="tema-sunce"', html)
+        self.assertIn('class="tema-mjesec"', html)
+
+    def test_slikice_prekidaca_ne_dijele_ime_s_plocom_sunca(self):
+        # `.sunce` je ploca s izlaskom i zalaskom, sa svojim `padding`om i
+        # rubom. Da prekidac nosi isto ime, `box-sizing: border-box` bi mu
+        # pojeo crtez: na sirokom zaslonu do nule, na uskom bi ostao
+        # komadic i crta od `border-bottom`. Bilo je tako jednom.
+        html = self._get("/prognoze/").content.decode()
+        self.assertNotIn('<svg class="sunce"', html)
+        self.assertNotIn('<svg class="mjesec"', html)
+
+
+class DarkThemeTests(SimpleTestCase):
+    """Tamna tema: paleta u CSS-u i prozirne inacice slikica."""
+
+    STATIC = Path(settings.STATICFILES_DIRS[0])
+    TAMNI_BLOK = "@media (prefers-color-scheme: dark)"
+    # Tamna vrijedi u dva slucaja: sustav kaze tamno a covjek nije trazio
+    # svijetlo, i covjek je sam odabrao tamno.
+    PO_SUSTAVU = ':root:not([data-tema="svijetlo"])'
+    PO_IZBORU = ':root[data-tema="tamno"]'
+
+    # Boje koje su u obje teme iste, pa im tamna inacica ne treba.
+    ISTE_U_OBJE = {"--na-pilula"}
+
+    def _css(self):
+        return (self.STATIC / "prognoza.css").read_text(encoding="utf-8")
+
+    def _blok(self, css, selektor):
+        """Sadrzaj { } bloka iza selektora, bez uvlaka."""
+        start = css.index("{", css.index(selektor))
+        dubina = 0
+        for i in range(start, len(css)):
+            if css[i] == "{":
+                dubina += 1
+            elif css[i] == "}":
+                dubina -= 1
+                if dubina == 0:
+                    tijelo = css[start + 1:i]
+                    return "\n".join(
+                        redak.strip() for redak in tijelo.splitlines()
+                        if redak.strip()
+                    )
+        raise AssertionError("blok {0} se ne zatvara".format(selektor))
+
+    def _imena_boja(self, tekst):
+        imena = set()
+        for redak in tekst.splitlines():
+            redak = redak.strip()
+            if redak.startswith("--") and ":" in redak:
+                imena.add(redak.split(":", 1)[0].strip())
+        return imena
+
+    def _png_ima_alfu(self, path):
+        # Tip boje stoji u IHDR bloku; 4 i 6 imaju alfu.
+        with open(path, "rb") as f:
+            data = f.read(32)
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n", "{0} nije PNG".format(path))
+        return data[25] in (4, 6)
+
+    def test_css_ima_tamnu_temu(self):
+        css = self._css()
+        self.assertIn(self.TAMNI_BLOK, css)
+        # Bez ovoga klizaci i okviri polja ostanu svijetli.
+        self.assertIn("color-scheme: light dark", css)
+
+    def test_svaka_boja_ima_tamnu_inacicu(self):
+        # Boja koja se zaboravi prepisati ostane svijetla i na tamnoj
+        # podlozi - a to se vidi tek kad se na nju naleti.
+        css = self._css()
+        svijetle = self._imena_boja(
+            css[css.index(":root {"):css.index(self.TAMNI_BLOK)]
+        )
+        tamne = self._imena_boja(self._blok(css, self.PO_SUSTAVU))
+
+        nedostaju = svijetle - tamne - self.ISTE_U_OBJE
+        self.assertEqual(
+            nedostaju, set(),
+            "bez tamne inacice: {0}".format(sorted(nedostaju)),
+        )
+
+    def test_oba_tamna_bloka_su_ista(self):
+        # Tamne boje stoje na dva mjesta (po sustavu i po izboru), jer CSS
+        # nema nacina da isti popis svojstava podijeli medu selektorima.
+        # Ovo cuva da ne odu svaki na svoju stranu.
+        css = self._css()
+        self.assertEqual(
+            self._blok(css, self.PO_SUSTAVU),
+            self._blok(css, self.PO_IZBORU),
+            "tamne boje se razlikuju izmedu sustava i rucnog izbora",
+        )
+
+    def test_izricit_izbor_dolazi_poslije_sustava(self):
+        # Ista specificnost, pa odlucuje redoslijed: da rucni izbor tamne
+        # nadjaca sustav koji kaze svijetlo, mora stajati nize.
+        css = self._css()
+        self.assertLess(css.index(self.PO_SUSTAVU), css.index(self.PO_IZBORU))
+
+    def test_svaka_slikica_ima_prozirnu_inacicu(self):
+        # Slikice su crtane na bijeloj podlozi; na tamnoj bi svaka bila
+        # bijeli kvadratic, pa uz svaku stoji i inacica bez pozadine.
+        imena = set(CONDITION_ICONS.values()) | set(NIGHT_ICONS.values())
+        imena |= {"{0}.png".format(smjer) for smjer in _COMPASS}
+        imena.add(UNKNOWN_ICON)
+        # Slikice koje predlozak trazi izravno, izvan popisa stanja.
+        imena |= {"sun.png", "moon.png", "umbrella.png"}
+
+        for ime in sorted(imena):
+            with self.subTest(slikica=ime):
+                put = self.STATIC / "prozirno" / ime
+                self.assertTrue(put.is_file(), "nedostaje prozirno/{0}".format(ime))
+                self.assertTrue(
+                    self._png_ima_alfu(put),
+                    "prozirno/{0} nema alfu".format(ime),
+                )
+
+    def test_prozirne_su_zasebne_datoteke(self):
+        # Izvorne se samo citaju - naredba `prozirne` pise u prozirno/.
+        # (Da je pozadina stvarno uklonjena provjerava se okom; za citanje
+        # piksela ovdje bi trebao Pillow, koji stranica inace ne treba.)
+        for ime in ("sun.png", "rain.png", "N.png"):
+            with self.subTest(slikica=ime):
+                izvorna = (self.STATIC / ime).read_bytes()
+                prozirna = (self.STATIC / "prozirno" / ime).read_bytes()
+                self.assertNotEqual(
+                    izvorna, prozirna,
+                    "prozirno/{0} je samo preslika izvorne".format(ime),
+                )
+
 class DiacriticsTests(SimpleTestCase):
     """Tekst koji se vidi u pregledniku nosi hrvatske dijakritike.
 
