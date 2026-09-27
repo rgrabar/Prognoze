@@ -67,6 +67,16 @@ PRECIPITATION = {
     Condition.THUNDER_HAIL,
 }
 
+# Odgovor na "treba li kisobran".
+#
+# Ispod ovoliko mm se kolicina ne spominje - to je rosa na staklu, ne
+# kisa. A kad do kraja dana ostane manje od ovoliko sati, o danasnjem se
+# danu nema sto vise reci, pa recenica gleda sutra.
+RAIN_MM_MIN = 0.5
+RAIN_MIN_HOURS = 3
+# Suh dan s ovolikom vjerojatnoscu nije bas suh, pa se to i kaze.
+RAIN_DOUBT_PCT = 30
+
 # Kratice dana u tjednu, po `datetime.weekday()` (ponedjeljak = 0).
 WEEKDAYS = ["pon", "uto", "sri", "čet", "pet", "sub", "ned"]
 # Puna imena za naslove traka po satima ("četvrtak po satima").
@@ -220,6 +230,14 @@ class AggregatedHour:
             parts.append("{0} mm".format(self.precip_mm))
         parts.append("{0} izvora".format(self.sources))
         return " | ".join(parts)
+
+
+@dataclass
+class RainNote:
+    """Recenica o oborini: glavni dio i, ako ima sto, sitni dodatak."""
+
+    label: str
+    detail: str = ""
 
 
 @dataclass
@@ -517,6 +535,96 @@ class Aggregated:
         if not self.days or not self.days[0].has_hours:
             return []
         return self.days[0].hours
+
+    def _rain_for(self, hours, today):
+        """Recenica za jedan niz sati. `today` bira rijeci (danas/sutra)."""
+        hours = [h for h in hours if h.sources]
+        wet = [h for h in hours if h.condition in PRECIPITATION]
+
+        if not wet:
+            note = RainNote("Danas bez kiše" if today else "Sutra bez kiše")
+            # Ako su izvori ipak neodlucni, bolje to reci nego glumiti
+            # sigurnost: izglasano stanje je suho, ali vjerojatnost nije mala.
+            izgledi = [h.precip_prob for h in hours if h.precip_prob is not None]
+            najvise = max(izgledi) if izgledi else 0
+            if najvise >= RAIN_DOUBT_PCT:
+                note.detail = "vjerojatnost do {0:.0f}%".format(najvise)
+            return note
+
+        prvi = wet[0]
+        naval, kraj, do_kraja = self._spell(hours, prvi)
+
+        # Kako se oborina zove uzima se iz izglasanog stanja, isto kao
+        # slikica - da recenica i traka ne govore razlicito.
+        vrsta = label_for(prvi.condition)
+        if today and prvi.is_now:
+            # Tko gleda kroz prozor zna da pada; zanima ga kad prestaje.
+            tekst = "{0} sada".format(vrsta)
+            kraj_tekst, do_kraja_tekst = ", staje oko {0}h", ", do kraja dana"
+        else:
+            pocetak = "{0} oko {1}h" if today else "sutra {0} oko {1}h"
+            tekst = pocetak.format(vrsta, prvi.hour)
+            kraj_tekst, do_kraja_tekst = " do {0}h", " do kraja dana"
+
+        if kraj is not None:
+            tekst += kraj_tekst.format(kraj)
+        elif do_kraja:
+            tekst += do_kraja_tekst
+
+        dodatak = []
+        # Kad vec pada, vjerojatnost nema sto reci - ili pada ili ne pada.
+        # Izvori tad znaju izglasati oborinu uz nisku vjerojatnost, pa je
+        # recenica izgledala kao da si proturjeci ("rosulja sada, 15%").
+        #
+        # Za buduci naval se uzima najveca vjerojatnost u njemu: to je
+        # izgled da covjek pokisne dok traje, a ne stanje bas prvog sata.
+        if not (today and prvi.is_now):
+            izgledi = [h.precip_prob for h in naval if h.precip_prob is not None]
+            if izgledi:
+                dodatak.append("vjerojatnost {0:.0f}%".format(max(izgledi)))
+        # Zbraja se samo ovaj naval. Dan zna imati i kasniji pljusak, a
+        # njegovi milimetri nemaju veze sa satom koji recenica spominje.
+        mm = sum(h.precip_mm for h in naval if h.precip_mm is not None)
+        if mm >= RAIN_MM_MIN:
+            dodatak.append("{0} mm".format(rounded(mm)))
+
+        return RainNote(tekst[0].upper() + tekst[1:], ", ".join(dodatak))
+
+    @staticmethod
+    def _spell(hours, prvi):
+        """Prvi neprekinuti naval oborine: (sati, sat prestanka, do kraja).
+
+        "Sat prestanka" je prvi suh sat poslije navala. Ako podaci stanu
+        dok jos pada, prestanak se ne zna - tada je `do_kraja` tocno kad
+        je niz dosao do kraja, a kad je posred njega rupa (sat bez ijednog
+        izvora) ne tvrdi se nista.
+        """
+        naval = [prvi]
+        for hour in hours[hours.index(prvi) + 1:]:
+            if hour.hour != (naval[-1].hour + 1) % 24:
+                # Rupa u podacima - dalje se ne zna.
+                return naval, None, False
+            if hour.condition not in PRECIPITATION:
+                return naval, hour.hour, False
+            naval.append(hour)
+        return naval, None, True
+
+    @property
+    def rain_note(self):
+        """Treba li kisobran - pitanje zbog kojeg se prognoza i otvara.
+
+        Gleda preostale sate danasnjeg dana. Kad ih je premalo da bi
+        odgovor jos nesto znacio (kasna vecer), gleda sutra: "danas bez
+        kise" u 23 h nikome ne koristi.
+        """
+        danas = [h for h in self.day_hours if not h.is_past and h.sources]
+        if len(danas) >= RAIN_MIN_HOURS:
+            return self._rain_for(danas, True)
+
+        sutra = self.tomorrow_hours
+        if sutra:
+            return self._rain_for(sutra, False)
+        return None
 
     @property
     def local_time_label(self):

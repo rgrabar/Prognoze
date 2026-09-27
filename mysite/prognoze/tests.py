@@ -1847,6 +1847,141 @@ class AggregateBuildTests(SimpleTestCase):
         self.assertFalse(any(h.is_past for h in sutra))
         self.assertTrue(all(h.condition == Condition.RAIN for h in sutra))
 
+    def _s_kisom(self, sati_kise, temp=20.0):
+        """Danasnji dan s kisom u zadanim lokalnim satima."""
+        forecast = self._forecast("a", temp, Condition.CLEAR, 10.0, 0)
+        for point in forecast.hours:
+            lokalni = (point.time.hour + 2) % 24
+            if lokalni in sati_kise:
+                point.condition = Condition.RAIN
+                point.precip_prob = 60
+                point.precip_mm = 1.2
+            else:
+                point.precip_prob = 5
+                point.precip_mm = 0.0
+        return forecast
+
+    def test_kisa_kasnije_danas(self):
+        # Sada je 14 h lokalno; kisa u 17 i 18, pa prestaje u 19.
+        result = aggregate.build(
+            self.location, [self._s_kisom({17, 18})], now_utc=self.now
+        )
+        poruka = result.rain_note
+
+        self.assertEqual(poruka.label, "Kiša oko 17h do 19h")
+        self.assertIn("vjerojatnost 60%", poruka.detail)
+        self.assertIn("2.4 mm", poruka.detail)
+
+    def test_kisa_koja_vec_pada_kaze_kad_staje(self):
+        # Tko gleda kroz prozor zna da pada; zanima ga kad prestaje.
+        result = aggregate.build(
+            self.location, [self._s_kisom({14, 15})], now_utc=self.now
+        )
+        poruka = result.rain_note
+
+        self.assertEqual(poruka.label, "Kiša sada, staje oko 16h")
+        # Dok pada, vjerojatnost nema sto reci - ili pada ili ne pada.
+        # Izvori znaju izglasati oborinu uz niske izglede, pa je recenica
+        # izgledala kao da si proturjeci ("Kiša sada, vjerojatnost 15%").
+        self.assertNotIn("vjerojatnost", poruka.detail)
+        self.assertIn("2.4 mm", poruka.detail)
+
+    def test_vjerojatnost_je_najveca_u_navalu(self):
+        # Ne ona prvog sata: pitanje je hoce li covjek pokisnuti dok
+        # naval traje, a ne kakvi su izgledi bas u prvom satu.
+        forecast = self._s_kisom({17, 18})
+        for point in forecast.hours:
+            lokalni = (point.time.hour + 2) % 24
+            if lokalni == 17:
+                point.precip_prob = 30
+            elif lokalni == 18:
+                point.precip_prob = 80
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertIn("vjerojatnost 80%", result.rain_note.detail)
+
+    def test_kasniji_pljusak_ne_ulazi_u_milimetre(self):
+        # Kisa u 17-18, suho u 19-20, pa opet u 21. Recenica govori o
+        # prvom navalu, pa i milimetri smiju biti samo njegovi - inace
+        # broj i sat opisuju razlicite dogadaje.
+        result = aggregate.build(
+            self.location, [self._s_kisom({17, 18, 21})], now_utc=self.now
+        )
+        poruka = result.rain_note
+
+        self.assertEqual(poruka.label, "Kiša oko 17h do 19h")
+        self.assertIn("2.4 mm", poruka.detail)
+        self.assertNotIn("3.6 mm", poruka.detail)
+
+    def test_kisa_koja_traje_do_kraja_dana(self):
+        # Podaci stanu dok jos pada, pa se sat prestanka ne izmislja.
+        result = aggregate.build(
+            self.location, [self._s_kisom({22, 23})], now_utc=self.now
+        )
+        self.assertEqual(result.rain_note.label, "Kiša oko 22h do kraja dana")
+
+    def test_kisa_koja_je_prosla_se_ne_broji(self):
+        # Kisa u 9 h je iza nas - recenica gleda samo naprijed.
+        result = aggregate.build(
+            self.location, [self._s_kisom({9})], now_utc=self.now
+        )
+        self.assertEqual(result.rain_note.label, "Danas bez kiše")
+
+    def test_suh_dan(self):
+        result = aggregate.build(
+            self.location, [self._s_kisom(set())], now_utc=self.now
+        )
+        poruka = result.rain_note
+
+        self.assertEqual(poruka.label, "Danas bez kiše")
+        self.assertEqual(poruka.detail, "")
+
+    def test_suh_dan_ali_izvori_nisu_sigurni(self):
+        # Izglasano stanje je suho, a vjerojatnost visoka - to se kaze,
+        # da recenica ne glumi sigurnost koje nema.
+        forecast = self._s_kisom(set())
+        for point in forecast.hours:
+            point.precip_prob = 45
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(result.rain_note.label, "Danas bez kiše")
+        self.assertEqual(result.rain_note.detail, "vjerojatnost do 45%")
+
+    def test_vrsta_oborine_prati_izglasano_stanje(self):
+        forecast = self._s_kisom({16}, temp=-2.0)
+        for point in forecast.hours:
+            if point.condition == Condition.RAIN:
+                point.condition = Condition.SNOW
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(result.rain_note.label, "Snijeg oko 16h do 17h")
+
+    def test_kasno_navecer_gleda_sutra(self):
+        # U 23 h "danas bez kise" nikome ne koristi, pa se gleda sutra.
+        kasno = datetime(2026, 9, 2, 21, 0, tzinfo=timezone.utc)  # 23 h lokalno
+        forecast = self._s_kisom(set())
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            moment = zadnji + timedelta(hours=i)
+            lokalni = (moment.hour + 2) % 24
+            forecast.hours.append(
+                HourPoint(
+                    time=moment,
+                    temp_c=15.0,
+                    condition=Condition.RAIN if lokalni == 8 else Condition.CLEAR,
+                    precip_prob=70 if lokalni == 8 else 5,
+                    precip_mm=2.0 if lokalni == 8 else 0.0,
+                )
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=kasno)
+
+        self.assertEqual(result.rain_note.label, "Sutra kiša oko 8h do 9h")
+
+    def test_bez_podataka_nema_recenice(self):
+        self.assertIsNone(
+            aggregate.build(self.location, [], now_utc=self.now).rain_note
+        )
+
     def test_svaki_dan_ima_jutro_i_popodne_iz_svojih_sati(self):
         forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
         # Sutra (2026-09-03 lokalno, +2): kisa od 8 do 10 ujutro, vedro popodne.

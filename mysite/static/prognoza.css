@@ -1009,6 +1009,21 @@ body {
     }
 }
 
+/* Recenica o kisi: odvojena crtom od brojki iznad, jer je odgovor, a
+   ne podatak. */
+.kisa {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--linija);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.kisa .sitno {
+    color: var(--slabo);
+    font-size: 13px;
+}
+
 /* --- izvori --- */
 
 .izvori {

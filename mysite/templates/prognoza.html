@@ -186,6 +186,19 @@
             {% endif %}
             </div>
         </div>
+
+        {% comment %}
+            Odgovor na pitanje zbog kojeg se prognoza i otvara. Stoji kao
+            recenica, a ne kao jos jedan broj medu brojkama.
+        {% endcomment %}
+        {% if prognoza.rain_note %}
+            <p class="kisa">
+                <strong>{{ prognoza.rain_note.label }}</strong>
+                {% if prognoza.rain_note.detail %}
+                    <span class="sitno">&mdash; {{ prognoza.rain_note.detail }}</span>
+                {% endif %}
+            </p>
+        {% endif %}
     </div>
 
     {% comment %}

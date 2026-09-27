@@ -330,6 +330,50 @@ Kartice su podijeljene po vremenu na koje se odnose:
 Prije su sutra po satima i pregled dana bili razbacani po danasnjim
 karticama.
 
+## Treba li kisobran
+
+Odmah ispod brojki u gornjoj kartici stoji jedna recenica - odgovor na
+pitanje zbog kojeg se prognoza i otvara:
+
+```
+Kisa oko 17h do 19h - vjerojatnost 60%, 2.4 mm
+Kisa sada, staje oko 16h - 2.4 mm
+Kisa oko 22h do kraja dana
+Danas bez kise - vjerojatnost do 45%
+Sutra kisa oko 8h do 9h
+```
+
+Nekoliko odluka iza toga:
+
+* **Gleda se izglasano stanje, ne vjerojatnost.** Isto pravilo kao kod
+  slikice dana, da recenica i traka ne govore razlicito.
+* **Vrsta oborine dolazi iz istog glasanja**, pa pise "Rosulja oko 20h"
+  ili "Snijeg oko 16h", a ne uvijek "kisa".
+* **Dok pada, vjerojatnost se ne pise.** Ili pada ili ne pada. Izvori
+  znaju izglasati oborinu uz niske izglede, pa je recenica izgledala kao
+  da si proturjeci: "Rosulja sada, vjerojatnost 15%".
+* **Za buduci naval se uzima najveca vjerojatnost u njemu**, a ne ona
+  prvog sata: pitanje je hoce li covjek pokisnuti dok naval traje.
+* **Pise i kad prestaje, ne samo kad pocinje.** Trazi se prvi
+  neprekinuti naval; sat prestanka je prvi suh sat poslije njega. Kod
+  "kisa sada" je to i jedini koristan podatak: tko gleda kroz prozor zna
+  da pada.
+* **Kad podaci stanu dok jos pada, sat se ne izmislja** - pise "do kraja
+  dana". A ako je posred niza rupa (sat bez ijednog izvora), ne tvrdi se
+  nista: rupa nije prestanak.
+* **Kolicina se spominje tek od `RAIN_MM_MIN` (0.5 mm)** - ispod toga je
+  to rosa na staklu, ne kisa. Zbraja se **samo po tom navalu**: dan zna
+  imati i kasniji pljusak, a njegovi milimetri nemaju veze sa satom koji
+  recenica spominje.
+* **Suh dan s visokom vjerojatnoscu to i kaze** (`RAIN_DOUBT_PCT`, 30%).
+  Izvori znaju izglasati "vedro" uz 45% izgleda za kisu; bez te napomene
+  recenica bi glumila sigurnost koje nema.
+* **Kasno navecer se gleda sutra.** Kad do kraja dana ostane manje od
+  `RAIN_MIN_HOURS` (3) sati, "danas bez kise" nikome ne koristi.
+* Sati koji su prosli se ne broje - recenica gleda samo naprijed.
+
+Ne kosta nijedan dodatni zahtjev: svi su sati vec izracunati za traku.
+
 ## Traka po satima
 
 Traka je pomicni prozor oko sadasnjeg trenutka: **8 sati unatrag i 16
