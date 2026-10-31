@@ -14,6 +14,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .conditions import Condition, icon_for, label_for, wind_direction
 
@@ -76,6 +77,15 @@ RAIN_MM_MIN = 0.5
 RAIN_MIN_HOURS = 3
 # Suh dan s ovolikom vjerojatnoscu nije bas suh, pa se to i kaze.
 RAIN_DOUBT_PCT = 30
+
+# Manja razlika izmedu danasnje i sutrasnje najvise temperature ne znaci
+# nista - izvori se i medusobno razilaze vise od toga.
+TOMORROW_SAME_C = 2.0
+
+# Kad se javlja mraz odnosno vrucina. Gleda se prozor trake unaprijed, pa
+# u njega ulaze i noc i rano jutro - ondje mraz i zivi.
+FROST_C = 0.0
+HEAT_C = 32.0
 
 # Kratice dana u tjednu, po `datetime.weekday()` (ponedjeljak = 0).
 WEEKDAYS = ["pon", "uto", "sri", "čet", "pet", "sub", "ned"]
@@ -238,6 +248,9 @@ class RainNote:
 
     label: str
     detail: str = ""
+    # Kasno navecer glavna recenica vec govori o sutra; biljeska ispod
+    # nje onda kisu ne ponavlja.
+    tomorrow: bool = False
 
 
 @dataclass
@@ -542,7 +555,10 @@ class Aggregated:
         wet = [h for h in hours if h.condition in PRECIPITATION]
 
         if not wet:
-            note = RainNote("Danas bez kiše" if today else "Sutra bez kiše")
+            note = RainNote(
+                "Danas bez kiše" if today else "Sutra bez kiše",
+                tomorrow=not today,
+            )
             # Ako su izvori ipak neodlucni, bolje to reci nego glumiti
             # sigurnost: izglasano stanje je suho, ali vjerojatnost nije mala.
             izgledi = [h.precip_prob for h in hours if h.precip_prob is not None]
@@ -588,7 +604,9 @@ class Aggregated:
         if mm >= RAIN_MM_MIN:
             dodatak.append("{0} mm".format(rounded(mm)))
 
-        return RainNote(tekst[0].upper() + tekst[1:], ", ".join(dodatak))
+        return RainNote(
+            tekst[0].upper() + tekst[1:], ", ".join(dodatak), tomorrow=not today
+        )
 
     @staticmethod
     def _spell(hours, prvi):
@@ -627,6 +645,79 @@ class Aggregated:
         return None
 
     @property
+    def warning_label(self):
+        """Mraz ili vrucina koja dolazi, ako je ima.
+
+        Sutnja je ovdje znacajka: obicnim danima recenice nema, pa kad se
+        pojavi, nesto znaci. Uzima se najhladniji odnosno najtopliji sat
+        prozora, a ne prvi koji prijede granicu - pitanje je koliko ce
+        biti hladno, ne kad je poceo mraz.
+        """
+        ahead = [
+            h for h in self.hours
+            if not h.is_past and h.sources and h.temp_c is not None
+        ]
+        if not ahead:
+            return ""
+
+        najhladniji = min(ahead, key=lambda h: h.temp_c)
+        if najhladniji.temp_c <= FROST_C:
+            return "Mraz oko {0}h, {1:.0f}\u00b0C".format(
+                najhladniji.hour, najhladniji.temp_c
+            )
+
+        najtopliji = max(ahead, key=lambda h: h.temp_c)
+        if najtopliji.temp_c >= HEAT_C:
+            return "Vrućina oko {0}h, {1:.0f}\u00b0C".format(
+                najtopliji.hour, najtopliji.temp_c
+            )
+
+        return ""
+
+    def _tomorrow_trend(self):
+        """Hoce li sutra trebati jakna - najvise temperature jedna uz drugu.
+
+        Broj je vec izracunat na dva mjesta, samo ih je covjek morao sam
+        usporedivati: jedan u gornjoj kartici, drugi u plocici sutrasnjeg
+        dana.
+        """
+        if self.max_c is None or not self.days:
+            return ""
+        sutra = self.days[0].max_c
+        if sutra is None:
+            return ""
+
+        razlika = sutra - self.max_c
+        if abs(razlika) < TOMORROW_SAME_C:
+            # Izricito "temperatura": stoji odmah ispod recenice o kisi,
+            # pa bi golo "slicno" znacilo da ni sutra nema kise.
+            return "slična temperatura"
+        return "{0}\u00b0C {1}".format(
+            round(abs(razlika)), "toplije" if razlika > 0 else "hladnije"
+        )
+
+    def _tomorrow_rain(self):
+        """Pada li sutra, u kratkom obliku."""
+        hours = [h for h in self.tomorrow_hours if h.sources]
+        if not hours:
+            return ""
+        wet = [h for h in hours if h.condition in PRECIPITATION]
+        if not wet:
+            return "bez kiše"
+        return "{0} oko {1}h".format(label_for(wet[0].condition), wet[0].hour)
+
+    @property
+    def tomorrow_label(self):
+        """Sutra u jednom retku: koliko toplo i pada li."""
+        dijelovi = [self._tomorrow_trend()]
+        biljeska = self.rain_note
+        if not (biljeska and biljeska.tomorrow):
+            dijelovi.append(self._tomorrow_rain())
+
+        dijelovi = [d for d in dijelovi if d]
+        return "Sutra " + ", ".join(dijelovi) if dijelovi else ""
+
+    @property
     def local_time_label(self):
         # Formatira se ovdje, a ne u predlosku: Djangov `date` filter bi
         # aware vrijeme pretvorio natrag u TIME_ZONE projekta (UTC).
@@ -656,16 +747,22 @@ def _day_long_label(moment, offset):
     return WEEKDAYS_LONG[moment.weekday()]
 
 
-def _bucket(indexes, slot_utc, local_zone, current_hour_utc, sun_times):
-    """Jedan sat trake: prosjek svih izvora koji taj sat pokrivaju."""
+def _bucket(indexes, slot_utc, local_zone, current_hour_utc, sun_times,
+            wall_hour=None):
+    """Jedan sat trake: prosjek svih izvora koji taj sat pokrivaju.
+
+    `wall_hour` je sat na zidnom satu, za kalendarske dane: oni su uvijek
+    00-23, pa i u noci promjene vremena, kad bi se sat iz UTC-a ponovio
+    (proljece: 02:00 ne postoji, pa bi dvaput pisalo 03:00).
+    """
     points = [
         index[slot_utc] for index in indexes.values() if slot_utc in index
     ]
-    slot_local = slot_utc.astimezone(local_zone)
+    sat = slot_utc.astimezone(local_zone).hour if wall_hour is None else wall_hour
 
     return AggregatedHour(
-        hour=slot_local.hour,
-        label="{0:02d}:00".format(slot_local.hour),
+        hour=sat,
+        label="{0:02d}:00".format(sat),
         temp_c=rounded(mean([p.temp_c for p in points])),
         precip_prob=rounded(mean([p.precip_prob for p in points]), 0),
         precip_mm=rounded(mean([p.precip_mm for p in points])),
@@ -676,7 +773,7 @@ def _bucket(indexes, slot_utc, local_zone, current_hour_utc, sun_times):
         is_night=_is_night(sun_times, slot_utc),
         is_past=slot_utc < current_hour_utc,
         # Ponoc dijeli prozor na dva dana - traka to treba pokazati.
-        starts_day=slot_local.hour == 0,
+        starts_day=sat == 0,
     )
 
 
@@ -689,17 +786,42 @@ def _sun_times(forecasts):
 
 
 def _is_night(sun_times, moment):
-    for sunrise, sunset in sun_times:
-        if sunrise.date() == moment.date():
-            return moment < sunrise or moment > sunset
-    # Bez podatka o suncu radije ostavi dnevnu slikicu.
-    return False
+    """Je li trenutak izvan svakog razdoblja od izlaska do zalaska.
+
+    Svaki par je izlazak i zalazak istog *lokalnog* dana, pa u UTC-u
+    znaju pasti na razlicite datume: u Tokiju sunce izlazi u 20:58 UTC
+    prethodnog dana. Ranije se par trazio po UTC datumu, pa je podne u
+    Tokiju naletjelo na sutrasnji par i ispalo "prije izlaska" - mjesec u
+    podne. Sad se samo pita je li trenutak unutar nekog para.
+    """
+    if not sun_times:
+        # Bez podatka o suncu radije ostavi dnevnu slikicu.
+        return False
+    return not any(sunrise <= moment <= sunset for sunrise, sunset in sun_times)
+
+
+def _local_zone(location):
+    """Vremenska zona mjesta, s ljetnim racunanjem vremena.
+
+    Ranije je to bio stalni pomak, onaj koji vrijedi *sada*. Prognoza ide
+    pet dana unaprijed, pa je tjedan prije promjene vremena svaki sat
+    poslije promjene bio pomaknut za sat: u listopadu je "17:00" nosio
+    podatke za 16:00, jos za dana - pa sunce gdje treba stajati mjesec.
+
+    Stalni pomak ostaje samo kao zaliha, kad naziv zone nije poznat.
+    """
+    if location.timezone:
+        try:
+            return ZoneInfo(location.timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    return timezone(timedelta(seconds=location.utc_offset_seconds))
 
 
 def build(location, forecasts, now_utc=None):
     """Spoji sve izvore u jedan rezultat za prikaz."""
     now_utc = now_utc or datetime.now(timezone.utc)
-    local_zone = timezone(timedelta(seconds=location.utc_offset_seconds))
+    local_zone = _local_zone(location)
     local_now = now_utc.astimezone(local_zone)
 
     good = [f for f in forecasts if f.ok]
@@ -759,6 +881,8 @@ def build(location, forecasts, now_utc=None):
     # Dan 0 se racuna zbog UV grafa i min/max, ali se ne prikazuje medu
     # danima sa strane - danas vec pise gore.
     for day in range(FORECAST_DAYS + 1):
+        # Zbrajanje ide po zidnom satu (00-23), a pomak za svaki sat zona
+        # racuna posebno - pa dan poslije promjene vremena ima svoj.
         pocetak = local_midnight + timedelta(days=day)
         hours = []
         for hour in range(24):
@@ -767,7 +891,8 @@ def build(location, forecasts, now_utc=None):
             ).replace(minute=0, second=0, microsecond=0)
             hours.append(
                 _bucket(
-                    indexes, slot_utc, local_zone, current_hour_utc, sun_times
+                    indexes, slot_utc, local_zone, current_hour_utc, sun_times,
+                    wall_hour=hour,
                 )
             )
 

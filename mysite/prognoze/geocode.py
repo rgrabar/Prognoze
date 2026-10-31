@@ -232,6 +232,25 @@ def parse_ipinfo(payload):
 _NOT_FOUND = "__nije_nadjeno__"
 
 
+def _ip_cache_key(ip):
+    """Kljuc za pamcenje mjesta po mrezi, a ne po tocnoj adresi.
+
+    Mobitel dobiva novu adresu gotovo pri svakom spajanju, ali unutar iste
+    mreze - pa je pamcenje po tocnoj adresi skoro uvijek promasivalo, i
+    svaki posjet je prvo cekao ipinfo, a tek onda izvore. Adrese iste
+    mreze (IPv4 /24, IPv6 /64) se ionako smjeste u isti grad.
+
+    Usluzi i dalje ide cijela adresa, i to samo kad mreza nije zapamcena.
+    """
+    try:
+        adresa = ipaddress.ip_address(ip)
+    except ValueError:
+        return "prognoze:ip:{0}".format(ip)
+    duljina = 24 if adresa.version == 4 else 64
+    mreza = ipaddress.ip_network("{0}/{1}".format(adresa, duljina), strict=False)
+    return "prognoze:ip:{0}".format(mreza)
+
+
 def from_ip(ip):
     """Priblizno mjesto iz IP adrese. Vraca Location ili None.
 
@@ -242,7 +261,7 @@ def from_ip(ip):
     if not ip_lookup_enabled() or not is_public_ip(ip):
         return None
 
-    key = "prognoze:ip:{0}".format(ip)
+    key = _ip_cache_key(ip)
     cached = cache.get(key)
     if cached == _NOT_FOUND:
         return None

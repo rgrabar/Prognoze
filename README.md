@@ -301,6 +301,46 @@ cistih 430 ms cekanja, i to serijski, prije nego bi ijedan izvor krenuo.
 Ostatak je cekanje na najsporiji izvor, sto se paralelizmom vise ne da
 skratiti - zato traka na vrhu pokazuje da se nesto dogada.
 
+#### Zasto je na mobitelu sporije
+
+Izmjereno na zivoj stranici (PythonAnywhere):
+
+| | prvi bajt |
+|---|---|
+| grad iz cachea | ~0.7 s |
+| grad koji nitko nije nedavno trazio | ~1.9 s |
+| bez grada, preko IP-a, sve hladno | ~2.6 s |
+
+Nijedan izvor nije spor sam po sebi - najsporiji (Tomorrow.io) treba oko
+0.6 s. Skupo je **hladno stanje**, a na malo posjecenoj stranici je
+gotovo svaki posjet s mobitela hladan:
+
+* **Cache je trajao 10 minuta.** Sad traje 30 (`CACHE_SECONDS`). Modeli
+  se ionako osvjezavaju jednom na sat. Traka, dani i recenice o kisi
+  racunaju se iz satnih podataka pri svakom prikazu, pa idu ukorak sa
+  satom i kad je dohvat star; najvise pola sata stari mogu biti samo
+  "trenutni" brojevi u gornjoj kartici.
+* **IP se pamtio po tocnoj adresi**, a mobitel dobiva novu skoro pri
+  svakom spajanju. Svaki je posjet prvo cekao ipinfo (~0.5 s), *pa tek
+  onda* izvore. Sad se pamti po mrezi (IPv4 /24, IPv6 /64), u kojoj adresa
+  ostaje.
+* **Tocna lokacija je svaki put bila novi kljuc**, jer GPS javi malo druge
+  koordinate. Kljuc je sad zaokruzen na oko kilometar - i dalje sitnije od
+  mreze ijednog modela.
+
+Na racunalu je sve to manje vidljivo jer se obicno vraca u vec ucitanu
+karticu, dok instalirana aplikacija na mobitelu pri svakom pokretanju
+ucitava ispocetka.
+
+Svjesno **nije** napravljeno:
+
+* **Cache na disku** (umjesto u memoriji) bi prezivio ponovno pokretanje,
+  ali i deploy - pa bi nakon promjene neke dataclass stari zapisi pukli
+  pri citanju. U memoriji ih Reload ionako obrise.
+* **Service worker** koji odmah pokaze zadnju stranicu pa je osvjezi -
+  najbrzi dojam, ali pokazuje jucerasnju prognozu dok se nova ne ucita, i
+  dodaje JavaScript koji se mora odrzavati.
+
 ### Svih sest Open-Meteo modela u jednom zahtjevu
 
 `models=a,b,c` vraca sve modele u jednom odgovoru, s oznakom modela kao
@@ -330,10 +370,15 @@ Kartice su podijeljene po vremenu na koje se odnose:
 Prije su sutra po satima i pregled dana bili razbacani po danasnjim
 karticama.
 
-## Treba li kisobran
+## Odgovori umjesto brojki
 
-Odmah ispod brojki u gornjoj kartici stoji jedna recenica - odgovor na
-pitanje zbog kojeg se prognoza i otvara:
+Odmah ispod brojki u gornjoj kartici stoje tri recenice. Sve troje se
+racuna iz podataka koji su ionako vec tu - samo ih je inace covjek morao
+sam iscitati iz trake i plocica.
+
+### Treba li kisobran
+
+Glavna recenica, odgovor na pitanje zbog kojeg se prognoza i otvara:
 
 ```
 Kisa oko 17h do 19h - vjerojatnost 60%, 2.4 mm
@@ -373,6 +418,49 @@ Nekoliko odluka iza toga:
 * Sati koji su prosli se ne broje - recenica gleda samo naprijed.
 
 Ne kosta nijedan dodatni zahtjev: svi su sati vec izracunati za traku.
+
+### Mraz i vrucina
+
+Kad u sljedecih 16 sati padne na `FROST_C` (0 °C) ili se popne na
+`HEAT_C` (32 °C), iznad kise se pojavi crvena recenica:
+
+```
+Mraz oko 7h, -2°C
+Vrucina oko 14h, 38°C
+```
+
+**Sutnja je ovdje znacajka.** Obicnim je danima nema, pa kad se pojavi,
+nesto znaci - i ne trosi mjesto osam mjeseci godisnje.
+
+Gleda se prozor trake unaprijed, a ne samo danasnji dan: mraz zivi u noci
+i ranom jutru, sto je vec sutrasnji datum. Uzima se najhladniji odnosno
+najtopliji sat prozora, a ne prvi koji prijede granicu - pitanje je
+koliko ce biti hladno, ne kad je mraz poceo.
+
+### Kakvo je sutra
+
+Zadnja, sitna recenica sazima sutra u jednom retku - koliko toplo i pada
+li:
+
+```
+Sutra 5°C hladnije, kisa oko 8h
+Sutra slicna temperatura, bez kise
+Sutra 4°C toplije, snijeg oko 14h
+```
+
+**Temperatura** je usporedba najvisih danas i sutra. Oba su broja vec na
+stranici, samo na dva mjesta: jedan u gornjoj kartici, drugi u plocici
+sutrasnjeg dana. Razlika manja od `TOMORROW_SAME_C` (2 °C) je "slicna
+temperatura" - izvori se i medusobno razilaze vise od toga, pa bi manja
+razlika glumila preciznost koje nema.
+
+Pise **"slicna temperatura", a ne golo "slicno"**: redak stoji odmah
+ispod recenice o kisi, pa bi "Danas bez kise / Sutra slicno" zvucalo kao
+da ni sutra nema kise - a govorilo je samo o stupnjevima.
+
+**Kisa** se navodi jednako kao u glavnoj recenici, po izglasanom stanju i
+prvom mokrom satu. Izuzetak je kasna vecer: tada glavna recenica vec
+govori o sutra (`RainNote.tomorrow`), pa je biljeska ne ponavlja.
 
 ## Traka po satima
 
@@ -566,6 +654,29 @@ Izvori to daju svaki malo drugacije, pa se svodi na mm po satu:
 
 Traka koristi iste slikice iz `static/`, a ne obojane kvadratice.
 Sat poslije zalaska sunca dobiva nocnu inacicu (`moon.png`).
+
+### Dan ili noc
+
+Sat je nocni ako nije **unutar nijednog para izlazak-zalazak**. Parove
+daje Open-Meteo, svaki za jedan *lokalni* dan - ali u UTC-u, pa daleko od
+Greenwicha izlazak i zalazak padnu na razlicite datume: u Tokiju sunce
+izlazi u 20:58 UTC prethodnog dana. Ranije se par trazio po UTC datumu,
+pa je podne u Tokiju naletjelo na sutrasnji par i ispalo "prije izlaska"
+- mjesec u podne (u Sydneyju devet sati krivo, u Honoluluu cetiri). U
+Rijeci se to nije vidjelo jer je preblizu UTC-u.
+
+Lokalno vrijeme se racuna **zonom** (`Europe/Zagreb`), a ne stalnim
+pomakom. Stalni pomak (`utc_offset_seconds`) vrijedi samo za sadasnji
+trenutak, a prognoza ide pet dana unaprijed: tjedan prije promjene
+vremena svaki je sat poslije promjene bio pomaknut. U listopadu je tako
+"17:00" nosio podatke za 16:00 - jos za dana - i pokazivao sunce kad je
+vec mrak. Stalni pomak ostaje samo kao zaliha, kad naziv zone nije poznat.
+
+Kalendarski dani se slazu po **zidnom satu**, 00-23, pa i dan promjene
+vremena ima 24 celije: u jesen se drugi put 02:00 preskace, a u proljece
+(02:00 ne postoji) celija ipak nosi oznaku 02:00 umjesto da se 03:00
+pojavi dvaput. Pomicna traka gore ide po stvarnim satima, pa ondje u
+jesen 02:00 pise dvaput - jer se stvarno dvaput dogodi.
 
 Stanja i njihove slikice su u `CONDITION_ICONS` (`conditions.py`). Trenutno
 neka stanja dijele istu slikicu jer je nemamo zasebnu:

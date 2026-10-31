@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 AIR_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 
 HTTP_TIMEOUT = 6
-CACHE_SECONDS = 600
+# Isto kao prognoza (vidi `providers.CACHE_SECONDS`); zrak se ionako
+# mijenja sporo.
+CACHE_SECONDS = 1800
 
 # Europski indeks kakvoce zraka (EEA): granica, naziv, boja.
 # Boje su iz sluzbene palete, malo potamnjene da se citaju na bijelom.
@@ -90,7 +92,7 @@ def _number(value):
 
 def quality_for(location):
     """Trenutna kakvoca zraka za mjesto. Nikad ne baca - vrati prazno."""
-    key = "prognoze:zrak:{0:.3f}:{1:.3f}".format(
+    key = "prognoze:zrak:{0:.2f}:{1:.2f}".format(
         location.latitude, location.longitude
     )
     cached = cache.get(key)

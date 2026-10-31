@@ -746,6 +746,69 @@ class IpinfoParseTests(SimpleTestCase):
         cache.clear()
 
 
+class CacheReachTests(SimpleTestCase):
+    """Koliko cesto posjet nade vec dohvaceno - o tome ovisi brzina."""
+
+    IPINFO = {
+        "city": "Rijeka", "country": "HR",
+        "loc": "45.3431,14.4092", "timezone": "Europe/Zagreb",
+    }
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _ipinfo(self):
+        odgovor = mock.Mock()
+        odgovor.json.return_value = self.IPINFO
+        odgovor.raise_for_status.return_value = None
+        return mock.patch.object(geocode.requests, "get", return_value=odgovor)
+
+    def test_ista_mreza_ne_trazi_ponovno(self):
+        # Mobitel dobiva novu adresu skoro pri svakom spajanju, ali unutar
+        # iste mreze. Po tocnoj adresi je pamcenje gotovo uvijek promasivalo.
+        with self._ipinfo() as poziv:
+            self.assertEqual(geocode.from_ip("8.8.8.8").name, "Rijeka")
+            self.assertEqual(geocode.from_ip("8.8.8.4").name, "Rijeka")
+        self.assertEqual(poziv.call_count, 1)
+
+    def test_ipv6_ista_mreza_ne_trazi_ponovno(self):
+        with self._ipinfo() as poziv:
+            geocode.from_ip("2001:4860:4860::8888")
+            geocode.from_ip("2001:4860:4860::8844")
+        self.assertEqual(poziv.call_count, 1)
+
+    def test_druga_mreza_trazi(self):
+        with self._ipinfo() as poziv:
+            geocode.from_ip("8.8.8.8")
+            geocode.from_ip("8.8.4.4")
+        self.assertEqual(poziv.call_count, 2)
+
+    def test_tocna_lokacija_dijeli_dohvat_unutar_kilometra(self):
+        # GPS svaki put javi malo druge koordinate; na 11 m je to bio novi
+        # kljuc, pa je svaki takav posjet cekao sve izvore.
+        izvor = mock.Mock()
+        izvor.name = "open_meteo"
+        ovdje = Location("A", "", 45.32712, 14.44221)
+        sto_metara_dalje = Location("A", "", 45.32790, 14.44290)
+        drugi_kvart = Location("B", "", 45.36000, 14.44221)
+
+        self.assertEqual(
+            providers._cache_key(izvor, ovdje),
+            providers._cache_key(izvor, sto_metara_dalje),
+        )
+        self.assertNotEqual(
+            providers._cache_key(izvor, ovdje),
+            providers._cache_key(izvor, drugi_kvart),
+        )
+
+    def test_dohvat_vrijedi_pola_sata(self):
+        self.assertEqual(providers.CACHE_SECONDS, 30 * 60)
+        self.assertEqual(air.CACHE_SECONDS, 30 * 60)
+
+
 class NominatimParseTests(SimpleTestCase):
     """Nominatim naselje javlja pod razlicitim kljucevima."""
 
@@ -1338,6 +1401,110 @@ class VoteTests(SimpleTestCase):
         )
         self.assertIsNone(aggregate.vote([None, None]))
         self.assertIsNone(aggregate.vote([]))
+
+
+class DayNightTests(SimpleTestCase):
+    """Dan ili noc - i u Tokiju, i u tjednu promjene vremena."""
+
+    @staticmethod
+    def _utc(*dijelovi):
+        return datetime(*dijelovi, tzinfo=timezone.utc)
+
+    def test_tokio_podne_je_dan(self):
+        # Pravi parovi koje Open-Meteo vraca za Tokio: izlazak pada na
+        # prethodni UTC datum. Ranije se par trazio po UTC datumu, pa je
+        # podne naletjelo na sutrasnji par i ispalo "prije izlaska".
+        parovi = [
+            (self._utc(2026, 10, 26, 20, 58), self._utc(2026, 10, 27, 7, 51)),
+            (self._utc(2026, 10, 27, 20, 59), self._utc(2026, 10, 28, 7, 50)),
+        ]
+        slucajevi = [
+            (self._utc(2026, 10, 27, 3, 0), False),    # 12:00 u Tokiju
+            (self._utc(2026, 10, 26, 21, 30), False),  # 06:30, tek izaslo
+            (self._utc(2026, 10, 27, 12, 0), True),    # 21:00
+            (self._utc(2026, 10, 26, 20, 0), True),    # 05:00, jos mrak
+        ]
+        for trenutak, noc in slucajevi:
+            with self.subTest(trenutak=trenutak):
+                self.assertEqual(aggregate._is_night(parovi, trenutak), noc)
+
+    def test_bez_podataka_o_suncu_je_dan(self):
+        self.assertFalse(aggregate._is_night([], self._utc(2026, 10, 27, 23, 0)))
+
+    def _tjedan(self, od, do):
+        """Izvor sa satima od-do; temperatura = UTC sat, da se vidi koji
+        je sat zavrsio u kojoj celiji."""
+        forecast = ProviderForecast(name="a", label="a", temp_c=10.0)
+        t = od
+        while t < do:
+            forecast.hours.append(
+                HourPoint(time=t, temp_c=float(t.hour), condition=Condition.CLEAR)
+            )
+            t += timedelta(hours=1)
+        # Zalazak u 15:58 UTC = 16:58 po zimskom, kao u Rijeci krajem listopada.
+        dan = od
+        while dan < do:
+            forecast.sun_times.append((
+                dan.replace(hour=5, minute=35), dan.replace(hour=15, minute=58),
+            ))
+            dan += timedelta(days=1)
+        return forecast
+
+    def test_tjedan_prije_promjene_vremena(self):
+        # Gleda se 23. listopada, jos po ljetnom (UTC+2); 25. se sat vraca.
+        # Ranije je +2 vrijedio za cijelu prognozu, pa je 26. "17:00"
+        # nosio podatke za 16:00 - jos za dana - i pokazivao sunce.
+        rijeka = Location(
+            "Rijeka", "HR", 45.33, 14.44,
+            utc_offset_seconds=7200, timezone="Europe/Zagreb",
+        )
+        forecast = self._tjedan(
+            self._utc(2026, 10, 22, 0, 0), self._utc(2026, 10, 29, 0, 0)
+        )
+        result = aggregate.build(
+            rijeka, [forecast], now_utc=self._utc(2026, 10, 23, 10, 0)
+        )
+
+        # Prije promjene: 17:00 po ljetnom je 15:00 UTC.
+        petak = result.days[0]
+        self.assertEqual(petak.hours[17].temp_c, 15.0)
+
+        # Poslije promjene: 17:00 po zimskom je 16:00 UTC - poslije zalaska.
+        ponedjeljak = result.days[2]
+        sedamnaest = ponedjeljak.hours[17]
+        self.assertEqual(sedamnaest.hour, 17)
+        self.assertEqual(sedamnaest.temp_c, 16.0)
+        self.assertTrue(sedamnaest.is_night)
+        self.assertEqual(sedamnaest.icon, "moon.png")
+
+        # I sam dan promjene ima sate 00-23, svaki jednom.
+        nedjelja = result.days[1]
+        self.assertEqual([h.hour for h in nedjelja.hours], list(range(24)))
+
+    def test_proljetna_promjena_ne_ponavlja_sat(self):
+        # 28. ozujka 2027. 02:00 ne postoji. Bez zidnog sata bi celija za
+        # 02:00 dobila oznaku iz UTC-a - drugi put 03:00.
+        rijeka = Location(
+            "Rijeka", "HR", 45.33, 14.44,
+            utc_offset_seconds=3600, timezone="Europe/Zagreb",
+        )
+        forecast = self._tjedan(
+            self._utc(2027, 3, 26, 0, 0), self._utc(2027, 4, 3, 0, 0)
+        )
+        result = aggregate.build(
+            rijeka, [forecast], now_utc=self._utc(2027, 3, 27, 10, 0)
+        )
+
+        promjena = result.days[0]
+        self.assertEqual([h.hour for h in promjena.hours], list(range(24)))
+        self.assertEqual(len({h.label for h in promjena.hours}), 24)
+
+    def test_nepoznata_zona_pada_na_stalni_pomak(self):
+        mjesto = Location(
+            "Negdje", "", 45.0, 14.0, utc_offset_seconds=3600, timezone="Nema/Takve"
+        )
+        zona = aggregate._local_zone(mjesto)
+        self.assertEqual(zona.utcoffset(None), timedelta(hours=1))
 
 
 class DayPartTests(SimpleTestCase):
@@ -1981,6 +2148,128 @@ class AggregateBuildTests(SimpleTestCase):
         self.assertIsNone(
             aggregate.build(self.location, [], now_utc=self.now).rain_note
         )
+
+    def _sa_satnim_temperaturama(self, po_satu):
+        """Danas i sutra, gdje zadani lokalni sati imaju zadanu temperaturu.
+
+        Ide i u sutra jer prozor trake gleda 16 h unaprijed - mraz i zivi
+        ondje, u noci i ranom jutru, a to je vec sutrasnji datum.
+        """
+        forecast = self._forecast("a", 15.0, Condition.CLEAR, 10.0, 0)
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            forecast.hours.append(
+                HourPoint(
+                    time=zadnji + timedelta(hours=i),
+                    temp_c=15.0,
+                    condition=Condition.CLEAR,
+                )
+            )
+        for point in forecast.hours:
+            lokalni = (point.time.hour + 2) % 24
+            if lokalni in po_satu:
+                point.temp_c = po_satu[lokalni]
+        return forecast
+
+    def test_mraz_se_javlja(self):
+        # Prozor trake ide 16 h unaprijed, pa hvata i noc i rano jutro.
+        forecast = self._sa_satnim_temperaturama({4: 1.0, 5: -2.0, 6: 0.5})
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(result.warning_label, "Mraz oko 5h, -2°C")
+
+    def test_vrucina_se_javlja(self):
+        forecast = self._sa_satnim_temperaturama({16: 31.0, 17: 34.0})
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(result.warning_label, "Vrućina oko 17h, 34°C")
+
+    def test_obicnog_dana_upozorenja_nema(self):
+        # Sutnja je znacajka: kad se recenica pojavi, nesto znaci.
+        result = aggregate.build(
+            self.location,
+            [self._forecast("a", 15.0, Condition.CLEAR, 10.0, 0)],
+            now_utc=self.now,
+        )
+        self.assertEqual(result.warning_label, "")
+
+    def test_sutra_toplije_ili_hladnije(self):
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        # Danas najvise 22.3; sutra ravnih 15 -> osjetno hladnije.
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            forecast.hours.append(
+                HourPoint(time=zadnji + timedelta(hours=i), temp_c=15.0)
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(result.max_c, 22.3)
+        self.assertEqual(result.days[0].max_c, 15.0)
+        self.assertEqual(result.tomorrow_label, "Sutra 7°C hladnije, bez kiše")
+
+    def test_sutra_slicno_kaze_da_je_rijec_o_temperaturi(self):
+        # Manja razlika ne znaci nista - izvori se i medusobno razilaze
+        # vise. A golo "slicno" bi, odmah ispod recenice o kisi, zvucalo
+        # kao da ni sutra nema kise.
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            forecast.hours.append(
+                HourPoint(time=zadnji + timedelta(hours=i), temp_c=21.5)
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(
+            result.tomorrow_label, "Sutra slična temperatura, bez kiše"
+        )
+
+    def test_sutrasnja_kisa_stoji_u_biljesci(self):
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            moment = zadnji + timedelta(hours=i)
+            lokalni = (moment.hour + 2) % 24
+            forecast.hours.append(
+                HourPoint(
+                    time=moment,
+                    temp_c=21.5,
+                    condition=Condition.RAIN if lokalni in (9, 10) else Condition.CLEAR,
+                )
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=self.now)
+
+        self.assertEqual(
+            result.tomorrow_label, "Sutra slična temperatura, kiša oko 9h"
+        )
+
+    def test_biljeska_ne_ponavlja_kisu_koju_glavna_recenica_vec_kaze(self):
+        # Kasno navecer glavna recenica vec govori o sutra.
+        kasno = datetime(2026, 9, 2, 21, 0, tzinfo=timezone.utc)
+        forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)
+        zadnji = forecast.hours[-1].time
+        for i in range(1, 25):
+            moment = zadnji + timedelta(hours=i)
+            lokalni = (moment.hour + 2) % 24
+            forecast.hours.append(
+                HourPoint(
+                    time=moment,
+                    temp_c=21.5,
+                    condition=Condition.RAIN if lokalni == 9 else Condition.CLEAR,
+                )
+            )
+        result = aggregate.build(self.location, [forecast], now_utc=kasno)
+
+        self.assertTrue(result.rain_note.tomorrow)
+        self.assertIn("Sutra kiša oko 9h", result.rain_note.label)
+        self.assertNotIn("kiša", result.tomorrow_label)
+
+    def test_bez_sutrasnjih_podataka_nema_usporedbe(self):
+        result = aggregate.build(
+            self.location,
+            [self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)],
+            now_utc=self.now,
+        )
+        self.assertEqual(result.tomorrow_label, "")
 
     def test_svaki_dan_ima_jutro_i_popodne_iz_svojih_sati(self):
         forecast = self._forecast("a", 20.0, Condition.CLEAR, 10.0, 0)

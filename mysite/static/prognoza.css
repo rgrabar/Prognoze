@@ -1009,19 +1009,34 @@ body {
     }
 }
 
-/* Recenica o kisi: odvojena crtom od brojki iznad, jer je odgovor, a
+/* Recenice-odgovori: odvojene crtom od brojki iznad, jer su odgovor, a
    ne podatak. */
-.kisa {
-    margin: 14px 0 0;
+.odgovori {
+    margin-top: 14px;
     padding-top: 12px;
     border-top: 1px solid var(--linija);
+}
+
+.odgovor {
+    margin: 0;
     font-size: 15px;
     line-height: 1.5;
 }
 
-.kisa .sitno {
+.odgovor + .odgovor {
+    margin-top: 4px;
+}
+
+.odgovor .sitno,
+.odgovor.sitno {
     color: var(--slabo);
     font-size: 13px;
+}
+
+/* Mraz i vrucina su iznimka, pa smiju malo odskakati. */
+.upozorava {
+    font-weight: 600;
+    color: var(--greska);
 }
 
 /* --- izvori --- */

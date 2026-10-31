@@ -188,16 +188,28 @@
         </div>
 
         {% comment %}
-            Odgovor na pitanje zbog kojeg se prognoza i otvara. Stoji kao
-            recenica, a ne kao jos jedan broj medu brojkama.
+            Odgovori, a ne jos brojki: sve troje se racuna iz podataka koji
+            su vec tu, samo ih je inace covjek morao sam iscitati.
+
+            Upozorenje ide prvo jer je iznimka - obicnim ga danima nema.
         {% endcomment %}
-        {% if prognoza.rain_note %}
-            <p class="kisa">
-                <strong>{{ prognoza.rain_note.label }}</strong>
-                {% if prognoza.rain_note.detail %}
-                    <span class="sitno">&mdash; {{ prognoza.rain_note.detail }}</span>
+        {% if prognoza.rain_note or prognoza.warning_label or prognoza.tomorrow_label %}
+            <div class="odgovori">
+                {% if prognoza.warning_label %}
+                    <p class="odgovor upozorava">{{ prognoza.warning_label }}</p>
                 {% endif %}
-            </p>
+                {% if prognoza.rain_note %}
+                    <p class="odgovor">
+                        <strong>{{ prognoza.rain_note.label }}</strong>
+                        {% if prognoza.rain_note.detail %}
+                            <span class="sitno">&mdash; {{ prognoza.rain_note.detail }}</span>
+                        {% endif %}
+                    </p>
+                {% endif %}
+                {% if prognoza.tomorrow_label %}
+                    <p class="odgovor sitno">{{ prognoza.tomorrow_label }}</p>
+                {% endif %}
+            </div>
         {% endif %}
     </div>
 

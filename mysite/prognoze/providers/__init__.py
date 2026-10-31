@@ -17,7 +17,14 @@ from .base import HourPoint, Provider, ProviderForecast  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-CACHE_SECONDS = 600
+# Koliko dugo vrijedi dohvacena prognoza. Stranica je malo posjecena, pa
+# je s deset minuta gotovo svaki posjet s mobitela nailazio na prazno i
+# cekao sve izvore. Modeli se ionako osvjezavaju jednom na sat.
+#
+# Traka, dani i recenice o kisi racunaju se iz satnih podataka pri svakom
+# prikazu, pa idu ukorak sa satom i kad je dohvat star. Stari mogu biti
+# samo "trenutni" brojevi u gornjoj kartici - najvise pola sata.
+CACHE_SECONDS = 1800
 
 
 def disabled_sources():
@@ -46,7 +53,13 @@ def all_providers():
 
 
 def _cache_key(provider, location):
-    return "prognoze:{0}:{1:.4f}:{2:.4f}".format(
+    """Kljuc zaokruzen na oko kilometar.
+
+    Tocna lokacija iz preglednika svaki put javi malo druge koordinate, pa
+    je na cetiri decimale (11 m) svaki takav posjet bio novi kljuc i cekao
+    sve izvore. Kilometar je i dalje sitniji od mreze ijednog modela.
+    """
+    return "prognoze:{0}:{1:.2f}:{2:.2f}".format(
         provider.name, location.latitude, location.longitude
     )
 
